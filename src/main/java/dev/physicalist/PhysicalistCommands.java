@@ -4,6 +4,8 @@ import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
+import java.util.ArrayList;
+import java.util.List;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
@@ -15,6 +17,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 
 /** Operator tools for selecting, scaling, removing and creating physics bodies. */
@@ -37,6 +40,12 @@ public final class PhysicalistCommands {
                 .then(Commands.literal("block")
                         .then(Commands.argument("pos", BlockPosArgument.blockPos())
                                 .executes(ctx -> convertBlock(ctx.getSource(), BlockPosArgument.getLoadedBlockPos(ctx, "pos")))))
+                .then(Commands.literal("assemble")
+                        .then(Commands.argument("from", BlockPosArgument.blockPos())
+                                .then(Commands.argument("to", BlockPosArgument.blockPos())
+                                        .executes(ctx -> assemble(ctx.getSource(),
+                                                BlockPosArgument.getLoadedBlockPos(ctx, "from"),
+                                                BlockPosArgument.getLoadedBlockPos(ctx, "to"))))))
                 .then(Commands.literal("spawn")
                         .then(Commands.argument("block", StringArgumentType.word())
                                 .then(Commands.argument("pos", BlockPosArgument.blockPos())
@@ -140,6 +149,41 @@ public final class PhysicalistCommands {
         if (entity == null || !source.getLevel().addFreshEntity(entity))
             return failure(source, "Block has no supported collision shape");
         source.sendSuccess(() -> Component.literal("Spawned physical " + key + " #" + entity.getId()), true);
+        return 1;
+    }
+
+    private static int assemble(CommandSourceStack source, BlockPos first, BlockPos last) {
+        ServerLevel level = source.getLevel();
+        int minX = Math.min(first.getX(), last.getX()), maxX = Math.max(first.getX(), last.getX());
+        int minY = Math.min(first.getY(), last.getY()), maxY = Math.max(first.getY(), last.getY());
+        int minZ = Math.min(first.getZ(), last.getZ()), maxZ = Math.max(first.getZ(), last.getZ());
+        if (maxX - minX >= PhysicalBlockEntity.MAX_SPAN || maxY - minY >= PhysicalBlockEntity.MAX_SPAN
+                || maxZ - minZ >= PhysicalBlockEntity.MAX_SPAN || !level.hasChunksAt(minX, minZ, maxX, maxZ))
+            return failure(source, "Selection too large or crosses unloaded chunks");
+        List<BlockPos> positions = new ArrayList<>();
+        List<BlockState> original = new ArrayList<>();
+        for (BlockPos pos : BlockPos.betweenClosed(first, last)) {
+            BlockState state = level.getBlockState(pos);
+            if (state.isAir()) continue;
+            positions.add(pos.immutable());
+            original.add(state);
+            if (positions.size() > PhysicalBlockEntity.MAX_BLOCKS)
+                return failure(source, "Assembly exceeds the block limit");
+        }
+        PhysicalBlockEntity entity = PhysicalBlockEntity.fromBlocks(level, positions);
+        if (entity == null) return failure(source, "Unsupported assembly or collision geometry");
+        for (int i = 0; i < positions.size(); i++) {
+            if (!level.setBlock(positions.get(i), Blocks.AIR.defaultBlockState(), 3)) {
+                for (int j = 0; j < i; j++) level.setBlock(positions.get(j), original.get(j), 3);
+                return failure(source, "Could not remove selected blocks");
+            }
+        }
+        if (!level.addFreshEntity(entity)) {
+            for (int i = 0; i < positions.size(); i++) level.setBlock(positions.get(i), original.get(i), 3);
+            return failure(source, "Could not spawn physical assembly");
+        }
+        source.sendSuccess(() -> Component.literal("Assembled " + positions.size()
+                + " blocks into physical entity #" + entity.getId()), true);
         return 1;
     }
 

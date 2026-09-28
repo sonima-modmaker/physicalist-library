@@ -100,8 +100,10 @@ the associated model and collision boxes and save/synchronize the joint.
 ## Performance tuning
 
 Large numbers of bodies, collision boxes, nearby blocks and substeps can
-reduce TPS. Start by checking for stuck bodies. Then lower
+reduce TPS. Since 0.4.0, clear flight paths skip the expensive collision
+substeps; nearby obstacles still use them to preserve thin-part contacts.
+Start by checking for stuck bodies. Then lower
 `maximumSubsteps` slightly or raise `substepDistance` slightly, and verify
 that fast thin parts still collide. Do not set the step distance to an
 entire block for a thin wing. For an assembled block, the library captures
-at most 64 voxel boxes to bound this cost.
+at most 128 blocks and 512 voxel boxes to bound this cost.

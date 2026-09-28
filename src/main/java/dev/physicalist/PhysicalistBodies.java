@@ -26,6 +26,7 @@ public final class PhysicalistBodies {
     }
 
     public static PhysicsBody find(Entity entity) {
+        if (entity.isRemoved()) return null;
         Tracked tracked = ACTIVE.get(entity.getUUID());
         if (tracked != null && tracked.body().entity() == entity
                 && !entity.isRemoved() && entity.level() instanceof ServerLevel level

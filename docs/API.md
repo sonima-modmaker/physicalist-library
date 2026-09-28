@@ -18,6 +18,7 @@ mods. Its public Java package is `dev.physicalist`.
 | `AutoAeroProfile` | Per-body geometric wing detection and force coefficients |
 | `PhysicalistBodies` | Access to recently stepped bodies for tools |
 | `PhysicalistBodyProvider` | Opt in if you use only calculation helpers |
+| `PhysicalistDragTarget` | Apply the Physics Wand's grab goal through an external flight solver |
 | `PhysicalistScalable` | Opt in to scaling both collision and visuals |
 | `Hinge`, `ContactHinge` | Joint and impact-driven folding motion |
 
@@ -143,15 +144,22 @@ are tracked automatically. If your mod uses only `AutoAerodynamics.step`,
 `Aerodynamics.step`, or `CompoundCollision` directly, implement
 `PhysicalistBodyProvider` on its entity and return your `PhysicsBody`.
 Otherwise the library cannot safely discover or manipulate it.
+If an existing flight solver owns velocity and impulses, also implement
+`PhysicalistDragTarget` so the wand passes a world-space grab goal to that
+solver. This prevents the wand and engine from overwriting each other's
+motion. Mods with their own F3+B outline can return `false` from
+`physicalistRenderDebugCollision()` to avoid duplicate lines.
 
-The **Block Assembler** converts one ordinary block into a
-`PhysicalBlockEntity`; it captures that block's voxel collision boxes
-before removing the world block. The physical block renders with the
-original block state, and its collision boxes rotate and scale with it.
-Blocks with block entities are rejected to prevent loss of inventory or
-other saved data. Empty shapes and shapes with more than 64 boxes are
-also rejected. The **Physical Entity Deleter** removes the aimed body
-without returning its source block.
+The **Block Assembler** selects two opposite corners with right clicks, then
+turns every non-air block in that region into **one** `PhysicalBlockEntity`.
+Sneak-right-click clears the first corner. It captures each block's voxel
+shape before removing the world blocks. The assembled body renders all source
+states, responds to off-center impact with angular motion, and can be pushed
+by nearby entities. F3+B draws each oriented collision box in green. The
+selection is limited to 128 blocks, 16 blocks along each axis, and 512 voxel
+collision boxes. Blocks with block entities or fluid states are rejected.
+The **Physical Entity Deleter** removes the aimed body without returning its
+source blocks.
 
 Operator commands (permission level 2):
 
@@ -163,15 +171,17 @@ Operator commands (permission level 2):
 /physicalist scale <0.1..16>
 /physicalist delete
 /physicalist block <x> <y> <z>
+/physicalist assemble <x1> <y1> <z1> <x2> <y2> <z2>
 /physicalist spawn <block_id> <x> <y> <z>
 ```
 
 `list` reports loaded Physicalist bodies. `select` stores a selected
 entity for the player; `info`, `scale`, and `delete` use that selection.
-`block` converts an existing world block. `spawn` creates a physical
-copy of a block's default state without removing a world block. Both
-commands use the block's collision voxel shape, falling back to its
-selection shape when collision is empty.
+`block` converts a single existing world block. `assemble` converts a selected
+region into one compound body. `spawn` creates a physical copy of a block's
+default state without removing a world block. These commands use each block's
+collision voxel shape, falling back to its selection shape when collision is
+empty.
 
 Only entities implementing `PhysicalistScalable` can be scaled. The
 physical block does. An external entity must implement this interface
@@ -187,7 +197,10 @@ resistance, maxRate)` advances a joint between its configured limits.
 The vehicle mod still decides which part breaks, folds, latches, or
 returns to rest, and saves that state.
 
-The built-in simulation currently checks blocks, not arbitrary entities
-or Sable ships. Its `onImpact` does not create explosions or sounds.
+The built-in simulation checks world blocks and applies both linear and
+angular impact impulses. The built-in block assembly also handles nearby
+entity pushes and walking contact. Generic vehicle adapters still own Sable
+ship contacts and any specialized entity-to-entity solver. `onImpact` does
+not create explosions or sounds.
 See [configuration](CONFIG.md) and [troubleshooting](TROUBLESHOOTING.md)
 before tuning large numbers of fast-moving bodies.

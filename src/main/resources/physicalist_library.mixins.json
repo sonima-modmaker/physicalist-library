@@ -1,0 +1,8 @@
+{
+  "required": true,
+  "package": "dev.physicalist.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "minVersion": "0.8",
+  "mixins": ["EntityWalkingCollisionMixin"],
+  "injectors": {"defaultRequire": 1}
+}

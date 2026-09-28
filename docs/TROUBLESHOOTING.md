@@ -2,7 +2,7 @@
 
 ## The game reports a missing or incompatible library
 
-Install `physicalist_library-0.3.0.jar` in the **same instance** as the
+Install `physicalist_library-0.4.0.jar` in the **same instance** as the
 dependent mod. Remove older Physicalist JARs from `mods`; multiple versions
 share one mod ID. Do not install the `-sources.jar`. Check Minecraft 1.21.1,
 NeoForge 21.1.219–21.1.251, and the dependent mod's `versionRange`.
@@ -41,6 +41,12 @@ simulating. If a mod uses only individual Physicalist math helpers, its
 entity must implement `PhysicalistBodyProvider` to expose a `PhysicsBody`.
 An unrelated vanilla entity is intentionally not selectable.
 
+For Create: The Air War rockets or debris, update **both** mods: Physicalist
+Library 0.4.0 or newer and a Create: The Air War build compiled against it.
+The older Create: The Air War build does not expose its physical projectiles
+to the wand, deleter or `/physicalist` commands. Only loaded entities can be
+selected; `/physicalist list` shows which bodies the tools can currently see.
+
 If the entity is visible but frozen beyond loaded chunks, the owning mod
 must arrange chunk loading or choose an unload policy; the library does
 not issue chunk tickets. A custom flight controller may also override
@@ -55,13 +61,16 @@ does. Another mod has to add that interface to its own entity and update
 its model and OBBs together. Scaling just the vanilla entity AABB would
 make the selection box larger while leaving its true physics unchanged.
 
-## The assembler refuses a block
+## The assembler refuses a selection
 
-The block must have a nonempty collision shape, or a nonempty selection
-shape as fallback, with no more than 64 voxel boxes. Blocks containing
-block entities (such as chests with inventories) are rejected because the
-generic physical block cannot preserve their data. The assembler also
-requires creative mode and permission to modify that position.
+Right click the first corner, then right click the opposite corner. Sneak-right
+click clears the first corner. The selected region must be loaded and contain
+1–128 non-air blocks, fit within 16 blocks along each axis, and contain no
+more than 512 voxel collision boxes. Each block needs a nonempty collision
+shape or a nonempty selection shape as fallback. Blocks with block entities
+(such as chests) or fluid states are rejected because their data cannot be
+preserved safely. Creative mode and permission to modify every selected block
+are also required.
 
 ## A thin part passes through a block
 

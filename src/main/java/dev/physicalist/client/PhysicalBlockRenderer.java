@@ -10,6 +10,7 @@ import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.Mth;
 
 public final class PhysicalBlockRenderer extends EntityRenderer<PhysicalBlockEntity> {
     private final BlockRenderDispatcher blocks;
@@ -26,13 +27,17 @@ public final class PhysicalBlockRenderer extends EntityRenderer<PhysicalBlockEnt
                                  PoseStack pose, MultiBufferSource buffers, int light) {
         pose.pushPose();
         pose.mulPose(Axis.YP.rotationDegrees(-yaw));
-        pose.mulPose(Axis.XP.rotationDegrees(entity.getXRot()));
-        pose.mulPose(Axis.ZP.rotationDegrees(entity.roll()));
+        pose.mulPose(Axis.XP.rotationDegrees(Mth.rotLerp(partialTick, entity.xRotO, entity.getXRot())));
+        pose.mulPose(Axis.ZP.rotationDegrees(entity.visualRoll(partialTick)));
         float scale = (float) entity.physicalistScale();
         pose.scale(scale, scale, scale);
-        pose.translate(-.5, -.5, -.5);
-        blocks.renderSingleBlock(
-                entity.blockState(), pose, buffers, light, OverlayTexture.NO_OVERLAY);
+        pose.translate(-entity.localCenter().x, -entity.localCenter().y, -entity.localCenter().z);
+        for (PhysicalBlockEntity.BlockPart part : entity.parts()) {
+            pose.pushPose();
+            pose.translate(part.offset().getX(), part.offset().getY(), part.offset().getZ());
+            blocks.renderSingleBlock(part.state(), pose, buffers, light, OverlayTexture.NO_OVERLAY);
+            pose.popPose();
+        }
         pose.popPose();
         super.render(entity, yaw, partialTick, pose, buffers, light);
     }

@@ -42,6 +42,10 @@ public final class PhysicsWandItem extends Item {
             player.displayClientMessage(Component.literal("Grabbed physical entity #" + entity.getId()), true);
         }
         Vec3 goal = player.getEyePosition().add(player.getLookAngle().scale(data.getDouble(DISTANCE)));
+        if (entity instanceof PhysicalistDragTarget target) {
+            target.physicalistDrag(player, goal);
+            return;
+        }
         Vec3 wanted = goal.subtract(entity.position()).scale(.35).subtract(entity.getDeltaMovement().scale(.65));
         if (wanted.length() > 3) wanted = wanted.normalize().scale(3);
         entity.setDeltaMovement(entity.getDeltaMovement().add(wanted));
