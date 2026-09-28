@@ -16,9 +16,13 @@ public final class PhysicalistSimulation {
         Entity entity = body.entity();
         if (!(entity.level() instanceof ServerLevel level) || entity.isRemoved()) return;
         PhysicsProfile p = body.profile();
-        Aerodynamics.Step air = Aerodynamics.step(entity.getDeltaMovement(),
-                body.angularVelocity(), body.forward(), body.up(), body.wingArea(),
-                body.wingImbalance(), body.stabilizers(), body.damaged(), p);
+        Aerodynamics.Step air = body.automaticAerodynamics()
+                ? AutoAerodynamics.step(entity.getDeltaMovement(), body.angularVelocity(),
+                        body.forward(), body.up(), entity.position(), body.collisionBoxes(),
+                        body.aerodynamicMass(), body.damaged(), p, body.autoAeroProfile())
+                : Aerodynamics.step(entity.getDeltaMovement(), body.angularVelocity(),
+                        body.forward(), body.up(), body.wingArea(), body.wingImbalance(),
+                        body.stabilizers(), body.damaged(), p);
         Vec3 velocity = air.velocity();
         if (velocity.length() > p.maximumSpeed()) velocity = velocity.normalize().scale(p.maximumSpeed());
         Vec3 angular = air.angular();

@@ -25,6 +25,16 @@ public final class PhysicalistConfig {
     public static final ModConfigSpec.DoubleValue MAX_HORIZON = d("aerodynamics.maximumHorizonTorque", .003, 1);
     public static final ModConfigSpec.DoubleValue IMBALANCE = d("aerodynamics.imbalanceTorque", .0015, 1);
     public static final ModConfigSpec.DoubleValue MAX_IMBALANCE = d("aerodynamics.maximumImbalanceTorque", .009, 1);
+    public static final ModConfigSpec.DoubleValue AUTO_THICKNESS = B.defineInRange("autoAero.maximumThicknessRatio", .18, .001, 1);
+    public static final ModConfigSpec.DoubleValue AUTO_AREA = d("autoAero.minimumArea", .2, 10000);
+    public static final ModConfigSpec.DoubleValue AUTO_ASPECT = B.defineInRange("autoAero.minimumAspectRatio", 1.2, 1, 100);
+    public static final ModConfigSpec.DoubleValue AUTO_INCIDENCE = B.defineInRange("autoAero.incidenceDegrees", 5.0, -30.0, 30.0);
+    public static final ModConfigSpec.DoubleValue AUTO_LIFT = d("autoAero.liftCoefficient", .012, 10);
+    public static final ModConfigSpec.DoubleValue AUTO_MAX_LIFT = d("autoAero.maximumLift", .24, 10);
+    public static final ModConfigSpec.DoubleValue AUTO_PLATE_DRAG = d("autoAero.plateDragCoefficient", .008, 10);
+    public static final ModConfigSpec.DoubleValue AUTO_MAX_DRAG = d("autoAero.maximumPlateDrag", .20, 10);
+    public static final ModConfigSpec.DoubleValue AUTO_TORQUE = d("autoAero.torqueCoefficient", .15, 10);
+    public static final ModConfigSpec.DoubleValue AUTO_MAX_TORQUE = d("autoAero.maximumTorque", .03, 10);
     public static final ModConfigSpec.DoubleValue ANGULAR_DAMPING = d("motion.angularDamping", .965, 1);
     public static final ModConfigSpec.DoubleValue RESTITUTION = d("collision.restitution", .12, 1);
     public static final ModConfigSpec.DoubleValue FRICTION = d("collision.friction", .35, 1);
@@ -40,6 +50,7 @@ public final class PhysicalistConfig {
     public static final ModConfigSpec.DoubleValue HINGE_LATCH_RATE = d("hinges.latchRate", .055, 1);
     public static final ModConfigSpec SPEC = B.build();
     private static volatile PhysicsProfile cached;
+    private static volatile AutoAeroProfile cachedAutoAero;
     public static PhysicsProfile defaults() {
         PhysicsProfile current = cached;
         if (current != null) return current;
@@ -50,11 +61,26 @@ public final class PhysicalistConfig {
         cached = current;
         return current;
     }
+    public static AutoAeroProfile autoAeroDefaults() {
+        AutoAeroProfile current = cachedAutoAero;
+        if (current != null) return current;
+        current = new AutoAeroProfile(AUTO_THICKNESS.get(), AUTO_AREA.get(), AUTO_ASPECT.get(),
+                AUTO_INCIDENCE.get(), AUTO_LIFT.get(), AUTO_MAX_LIFT.get(),
+                AUTO_PLATE_DRAG.get(), AUTO_MAX_DRAG.get(), AUTO_TORQUE.get(), AUTO_MAX_TORQUE.get());
+        cachedAutoAero = current;
+        return current;
+    }
     @SubscribeEvent public static void onLoading(ModConfigEvent.Loading event) {
-        if (event.getConfig().getModId().equals(PhysicalistLibrary.MOD_ID)) cached = null;
+        if (event.getConfig().getModId().equals(PhysicalistLibrary.MOD_ID)) {
+            cached = null;
+            cachedAutoAero = null;
+        }
     }
     @SubscribeEvent public static void onReloading(ModConfigEvent.Reloading event) {
-        if (event.getConfig().getModId().equals(PhysicalistLibrary.MOD_ID)) cached = null;
+        if (event.getConfig().getModId().equals(PhysicalistLibrary.MOD_ID)) {
+            cached = null;
+            cachedAutoAero = null;
+        }
     }
     private PhysicalistConfig() {}
 }

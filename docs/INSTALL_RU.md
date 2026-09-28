@@ -13,7 +13,7 @@
 | Метаданные NeoForge | `[21.1.219,21.1.252)` |
 | Java для сборки и запуска | 21 |
 | `modId` | `physicalist_library` |
-| Версия библиотеки | `0.1.0` |
+| Версия библиотеки | `0.2.0` |
 | Create, Veil, Sable | Не требуются самой библиотеке |
 | Лицензия исходного кода | GPL-3.0-only |
 
@@ -25,7 +25,7 @@
 ## Для игрока или сервера
 
 1. Установите Minecraft 1.21.1 и совместимый NeoForge.
-2. Скачайте `physicalist_library-0.1.0.jar` из релиза проекта либо соберите
+2. Скачайте `physicalist_library-0.2.0.jar` из релиза проекта либо соберите
    его по инструкции ниже.
 3. Положите файл в папку `mods` нужного профиля Minecraft.
 4. Установите мод техники, который использует библиотеку. Если это совместимая
@@ -88,8 +88,8 @@ cd C:\path\to\Physicalist-Library
 
 Результат находится в `build/libs/`:
 
-- `physicalist_library-0.1.0.jar` — мод для игры;
-- `physicalist_library-0.1.0-sources.jar` — исходники API для разработчиков.
+- `physicalist_library-0.2.0.jar` — мод для игры;
+- `physicalist_library-0.2.0-sources.jar` — исходники API для разработчиков.
 
 Если нет установленного JDK 21, Gradle может получить toolchain автоматически
 через конфигурацию шаблона, но для стабильной разработки лучше установить
@@ -98,9 +98,9 @@ JDK 21 и выбрать его в IDE.
 ### Проверки после сборки
 
 `BUILD SUCCESSFUL` означает, что компилятор и сборочные задачи завершились.
-Дополнительный тест `verification/LibraryPhysicsTest.java` проверяет три
-свойства расчётов: инерцию, изменение подъёмной силы при сложенном крыле и
-контакт тонкой детали с землёй на быстром перемещении. Он требует классы
+Дополнительный тест `verification/LibraryPhysicsTest.java` проверяет
+инерцию, ручную и автоматическую аэродинамику, крен от потери крыла,
+сопротивление при падении и контакт тонкой детали. Он требует классы
 Minecraft из NeoGradle и не заменяет проверку в запущенной игре.
 
 CI в `.github/workflows/build.yml` собирает код на `21.1.219` и `21.1.251`
@@ -115,7 +115,7 @@ JAR, собранный на нижней поддерживаемой верс�
 
 ```groovy
 dependencies {
-    implementation(files("libs/physicalist_library-0.1.0.jar"))
+    implementation(files("libs/physicalist_library-0.2.0.jar"))
 }
 ```
 
@@ -126,7 +126,7 @@ NeoForge мод**, а не только при компиляции. В `neoforg
 [[dependencies.your_mod_id]]
 modId="physicalist_library"
 type="required"
-versionRange="[0.1.0,)"
+versionRange="[0.2.0,)"
 ordering="AFTER"
 side="BOTH"
 ```

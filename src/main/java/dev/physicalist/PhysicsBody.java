@@ -20,6 +20,11 @@ public interface PhysicsBody {
     void rotate(Vec3 angular, double fraction);
 
     default PhysicsProfile profile() { return PhysicalistConfig.defaults(); }
+    /** Geometric aero is enabled by default; override to retain manual wingArea behavior. */
+    default boolean automaticAerodynamics() { return true; }
+    default AutoAeroProfile autoAeroProfile() { return PhysicalistConfig.autoAeroDefaults(); }
+    /** Relative inertia scale: increasing mass reduces lift and plate drag. */
+    default double aerodynamicMass() { return 1; }
     default double wingArea() { return 0; }
     default double wingImbalance() { return 0; }
     default double stabilizers() { return 1; }
