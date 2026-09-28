@@ -3,7 +3,7 @@
 Physicalist Library is a standalone physics mod and API for **Minecraft 1.21.1** on
 **NeoForge 21.1.219–21.1.251**. It provides compound collision, collision-driven
 aerodynamics, hinges, and a server-side rigid-body step for other mods. Version
-**0.4.0** also includes creative-mode tools for trying the physics
+**0.4.1** also includes creative-mode tools for trying the physics
 without writing an adapter first.
 
 Installing this JAR alone does **not** replace the physics of every Minecraft
@@ -19,7 +19,7 @@ entity. A vehicle mod must pass its model geometry and motion through the API.
 | Diagnose loading and physics problems | [Troubleshooting](docs/TROUBLESHOOTING.md) |
 | Read the previous Russian documentation | [Russian documentation (older version)](docs/ru/INSTALL_RU.md) |
 
-The built mod is `build/libs/physicalist_library-0.4.0.jar`. The `-sources.jar`
+The built mod is `build/libs/physicalist_library-0.4.1.jar`. The `-sources.jar`
 file is for development and must not be installed as the playable mod.
 
 ## What's included
@@ -102,8 +102,9 @@ The project builds on both supported NeoForge endpoints. The standalone
 `verification/LibraryPhysicsTest.java` checks manual and geometric aero,
 asymmetric wings, mass, fall drag and thin-part collision.
 `verification/CollisionParityTest.java` compares 20,000 randomized oriented
-contacts and swept contacts against the previous solver. Five server GameTests
-check persistence, assembly, the clear-path shortcut and a fast impact on thin bars.
+contacts and swept contacts against the previous solver. Six server GameTests
+check persistence, assembly, collision-part selection, the clear-path shortcut
+and a fast impact on thin bars.
 Runtime TPS should still be measured in a real world before a production modpack.
 
 Source code is **GPL-3.0-only**. `LICENSE` and `NOTICE` are included in the

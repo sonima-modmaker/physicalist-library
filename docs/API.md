@@ -159,7 +159,8 @@ by nearby entities. F3+B draws each oriented collision box in green. The
 selection is limited to 128 blocks, 16 blocks along each axis, and 512 voxel
 collision boxes. Blocks with block entities or fluid states are rejected.
 The **Physical Entity Deleter** removes the aimed body without returning its
-source blocks.
+source blocks. The wand and deleter select the actual oriented collision
+parts, rather than empty space within the entity's broadphase box.
 
 Operator commands (permission level 2):
 

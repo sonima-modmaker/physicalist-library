@@ -2,7 +2,7 @@
 
 ## The game reports a missing or incompatible library
 
-Install `physicalist_library-0.4.0.jar` in the **same instance** as the
+Install `physicalist_library-0.4.1.jar` in the **same instance** as the
 dependent mod. Remove older Physicalist JARs from `mods`; multiple versions
 share one mod ID. Do not install the `-sources.jar`. Check Minecraft 1.21.1,
 NeoForge 21.1.219–21.1.251, and the dependent mod's `versionRange`.

@@ -16,6 +16,20 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 @GameTestHolder(PhysicalistLibrary.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class PhysicalistGameTests {
+    @GameTest(template = "empty")
+    public static void toolsSelectActualCollisionPart(GameTestHelper helper) {
+        var wing = new CompoundCollision.Box(new Vec3(3, 3, 3),
+                new Vec3[]{new Vec3(1, 0, 0), new Vec3(0, 1, 0), new Vec3(0, 0, 1)},
+                new double[]{2, .025, .5});
+        helper.assertTrue(Double.isFinite(PhysicalistTargeting.rayFraction(wing,
+                        new Vec3(3, 4, 3), new Vec3(3, 2, 3))),
+                "Wand ray missed a thin wing");
+        helper.assertTrue(!Double.isFinite(PhysicalistTargeting.rayFraction(wing,
+                        new Vec3(3, 4, 4), new Vec3(3, 2, 4))),
+                "Wand selected empty space beside a thin wing");
+        helper.succeed();
+    }
+
     @GameTest(template = "empty", timeoutTicks = 80)
     public static void physicalBlockShapeAndScale(GameTestHelper helper) {
         var level = helper.getLevel();

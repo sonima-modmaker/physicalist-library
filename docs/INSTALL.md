@@ -8,7 +8,7 @@
 | NeoForge | 21.1.219 through 21.1.251 |
 | Java | 21 or newer runtime supporting Minecraft 1.21.1; Java 21 target for builds |
 | Mod ID | `physicalist_library` |
-| Library version | 0.4.0 |
+| Library version | 0.4.1 |
 | Create, Veil, Sable, IVR | No runtime dependency in this library |
 
 The NeoForge metadata uses `[21.1.219,21.1.252)`. A successful build on
@@ -17,7 +17,7 @@ both endpoints does not prove behavior on every intermediate release.
 ## For players and servers
 
 1. Install Minecraft 1.21.1 and a supported NeoForge release.
-2. Download `physicalist_library-0.4.0.jar` from the
+2. Download `physicalist_library-0.4.1.jar` from the
    [GitHub releases](https://github.com/sonima-modmaker/physicalist-library/releases).
 3. Put **one** copy in the instance's `mods` directory. Remove earlier
    Physicalist versions from that directory; two versions share a mod ID.
@@ -51,7 +51,7 @@ On Linux/macOS:
 ```
 
 The default build targets the lower endpoint, NeoForge 21.1.219. Its playable
-output is `build/libs/physicalist_library-0.4.0.jar`. The second command
+output is `build/libs/physicalist_library-0.4.1.jar`. The second command
 checks the upper endpoint. Both builds target Java 21 bytecode. GitHub Actions
 runs the same version matrix on pushes and pull requests.
 
@@ -66,7 +66,7 @@ For a local NeoGradle project, put the playable JAR in `libs` and add:
 
 ```groovy
 dependencies {
-    implementation(files("libs/physicalist_library-0.4.0.jar"))
+    implementation(files("libs/physicalist_library-0.4.1.jar"))
 }
 ```
 
