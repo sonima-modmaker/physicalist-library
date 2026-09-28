@@ -1,0 +1,7 @@
+{
+  "itemGroup.physicalist_library": "Physicalist Library",
+  "item.physicalist_library.physics_wand": "Физическая палочка",
+  "item.physicalist_library.assembler": "Ассемблер блоков",
+  "item.physicalist_library.deleter": "Удалитель физических сущностей",
+  "entity.physicalist_library.physical_block": "Физический блок"
+}

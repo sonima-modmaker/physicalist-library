@@ -15,6 +15,7 @@ public final class PhysicalistSimulation {
     public static void step(PhysicsBody body) {
         Entity entity = body.entity();
         if (!(entity.level() instanceof ServerLevel level) || entity.isRemoved()) return;
+        PhysicalistBodies.track(body);
         PhysicsProfile p = body.profile();
         Aerodynamics.Step air = body.automaticAerodynamics()
                 ? AutoAerodynamics.step(entity.getDeltaMovement(), body.angularVelocity(),

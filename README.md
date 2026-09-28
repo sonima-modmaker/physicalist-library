@@ -1,101 +1,92 @@
 # Physicalist Library
 
-**Physicalist Library** — самостоятельный мод и API физики для Minecraft **1.21.1** на
-**NeoForge 21.1.219–21.1.251**. Проект собран на основе официального NeoForge MDK.
-Его цель — дать другим модам расчёт движения составного тела, контактов тонких
-деталей с миром, аэродинамики и шарниров. Библиотека работает на клиенте и сервере,
-но шаг физики выполняется на сервере.
+Physicalist Library is a standalone physics mod and API for **Minecraft 1.21.1** on
+**NeoForge 21.1.219–21.1.251**. It provides compound collision, collision-driven
+aerodynamics, hinges, and a server-side rigid-body step for other mods. Version
+**0.3.0** also includes a small set of creative-mode tools for trying the physics
+without writing an adapter first.
 
-> Установка одной библиотеки не добавляет физику ванильным предметам или всем
-> сущностям автоматически. Мод с техникой должен передать её модель и состояние
-> через `PhysicsBody` или использовать отдельные расчётные классы.
+Installing this JAR alone does **not** replace the physics of every Minecraft
+entity. A vehicle mod must pass its model geometry and motion through the API.
 
-## С чего начать
+## Start here
 
-| Если вы... | Откройте |
+| Goal | Guide |
 |---|---|
-| Игрок и хотите поставить мод | [Установка и совместимость](docs/INSTALL_RU.md#для-игрока-или-сервера) |
-| Собираете модпак | [Проверка версий и зависимостей](docs/INSTALL_RU.md#совместимость) |
-| Разрабатываете аддон | [API и пример адаптера](docs/API_RU.md) |
-| Настраиваете полёт или столкновения | [Все параметры конфигурации](docs/CONFIG_RU.md) |
-| Столкнулись с вылетом или странной физикой | [Диагностика](docs/TROUBLESHOOTING_RU.md) |
-| Хотите собрать проект из исходников | [Сборка](docs/INSTALL_RU.md#сборка-из-исходников) |
+| Install the mod or build from source | [Installation](docs/INSTALL.md) |
+| Integrate vehicles or projectiles | [API and example adapter](docs/API.md) |
+| Tune lift, drag, contact and hinges | [Configuration reference](docs/CONFIG.md) |
+| Diagnose loading and physics problems | [Troubleshooting](docs/TROUBLESHOOTING.md) |
+| Read the previous Russian documentation | [Russian documentation (older version)](docs/ru/INSTALL_RU.md) |
 
-Готовый файл после сборки: `build/libs/physicalist_library-0.2.0.jar`.
-Для среды разработки создаётся также `physicalist_library-0.2.0-sources.jar`.
+The built mod is `build/libs/physicalist_library-0.3.0.jar`. The `-sources.jar`
+file is for development and must not be installed as the playable mod.
 
-## Что именно находится в библиотеке
+## What's included
 
-| Компонент | Для чего нужен |
+| Component | Purpose |
 |---|---|
-| `CompoundCollision` | Контакт двух повёрнутых коробок и проверка пути тонкой детали между кадрами |
-| `Aerodynamics` | Сопротивление воздуха, подъёмная сила, крен из-за асимметрии и восстановление курса |
-| `AutoAerodynamics` | Автоматическая подъёмная сила и сопротивление по тонким широким частям коллизии |
-| `AutoAeroProfile` | Настройка распознавания крыльев, угла установки, силы и момента |
-| `PhysicalistSimulation` | Готовый серверный шаг движения составного тела с столкновениями о блоки |
-| `PhysicsBody` | Интерфейс, через который другой мод сообщает форму, ориентацию и повреждения |
-| `PhysicsProfile` | Индивидуальные коэффициенты физики для вида техники или сущности |
-| `Hinge` | Ограниченный плавный шарнир |
-| `ContactHinge` | Расчёт складывания шарнира при контакте |
-| `PhysicalistConfig` | Значения по умолчанию из TOML-конфигурации |
+| `CompoundCollision` | Contacts between oriented boxes and swept thin-part collision |
+| `AutoAerodynamics` | Lift, fall drag and torque inferred from thin collision volumes |
+| `Aerodynamics` | Manual lift/drag model for guided or specialized vehicles |
+| `PhysicalistSimulation` | One server-side step for a compound physical body |
+| `PhysicsBody` | Vehicle adapter interface: shape, pose, mass and angular velocity |
+| `Hinge` / `ContactHinge` | Joint motion and contact-driven folding |
+| `PhysicalistBodies` | Registry of currently simulated bodies for tools and commands |
+| `PhysicalBlockEntity` | A movable copy of one ordinary block using its captured voxel collision shape |
 
-Расчёты и API библиотеки **не импортируют** Create, Veil, Sable, модели ракет,
-частицы или ресурсы другого мода. У библиотеки свой `modId` — `physicalist_library`.
+The creative tab **Physicalist Library** contains a **Physics Wand**, **Block
+Assembler**, and **Physical Entity Deleter**. Hold right click with the wand
+while aiming at a physical entity to drag it. Right click an ordinary block
+with the assembler to replace it with a physical block entity. Aim the deleter
+and right click to remove a physical entity. These are creative-mode tools.
+Blocks with block entities, empty collision/selection shapes, or more than 64
+voxel boxes cannot be assembled; their data would not be preserved safely.
 
-## Как она связана с Create: The Air War
+Operators can use `/physicalist list`, `/physicalist select <id>` or
+`/physicalist select look`, `/physicalist info`, `/physicalist scale <factor>`,
+`/physicalist delete`, `/physicalist block <x> <y> <z>`, and
+`/physicalist spawn <block_id> <x> <y> <z>`. The `block` command converts an
+existing world block; `spawn` creates a physical copy without removing one.
+Scaling is available for entities that implement `PhysicalistScalable`. The
+library's physical block does; other mods can opt in explicitly so that both
+their renderer and collision geometry scale together.
 
-Create: The Air War вызывает библиотеку для столкновений повёрнутых деталей,
-аэродинамики повреждённых аппаратов и контактного складывания крыльев. У него
-остаётся собственный адаптер для чтения геометрии моделей, задания тяги и наведения,
-взрывов, отрыва частей, кораблей Sable, синхронизации и прогрузки дальних объектов.
-Эти правила относятся к конкретным ракетам и бомбам, поэтому библиотека не
-содержит их названий или ресурсов. **Чтобы играть с версией Air War, которая
-подключена к Physicalist Library, нужны оба JAR-файла.**
+The wand can grab every live body stepped through `PhysicalistSimulation`.
+Mods using individual math classes without that simulation can expose their
+bodies through `PhysicalistBodyProvider`. This distinction avoids claiming
+control over unrelated entities or silently modifying their flight controller.
 
-## Immersive Vehicles Refurbished
+## Vehicle integrations
 
-Библиотека также предназначена для возможного подключения к **Immersive
-Vehicles Refurbished**: её API позволяет передать форму машины, крылья и
-скорость в общий расчёт столкновений и аэродинамики. Готового адаптера
-для этого мода пока нет, поэтому установка Physicalist Library сама по себе
-не меняет поведение его транспорта. Проекты независимы; это упоминание
-описывает направление интеграции, а не уже работающую совместимость.
+Create: The Air War uses the library's collision, aerodynamics and hinge math.
+It still owns weapon guidance, engines, explosions, debris, chunk loading and
+its own flight adapter. Its current weapons use the manual aerodynamic path;
+the new geometric auto-aero mode is available to vehicle adapters that call
+`PhysicalistSimulation` or `AutoAerodynamics.step`.
 
-В версии 0.2.0 универсальный решатель по умолчанию распознаёт несущие
-поверхности по составной коллизии. Например, машина с тонкими широкими
-крыльями может получить подъёмную силу при разгоне, а при падении крылья
-создают сопротивление. Мод машины всё равно задаёт двигатель, поворот модели
-и сами коробки крыльев. [Пример подключения](docs/API_RU.md#автоматическая-аэродинамика-по-коллизии).
+**Immersive Vehicles Refurbished** is a planned integration target. There is
+no IVR adapter or runtime dependency in this repository yet, so installing
+Physicalist Library does not alter its vehicles. The projects are independent.
 
-## Границы текущей реализации
+## Boundaries
 
-- Универсальный `PhysicalistSimulation` проверяет столкновения **с блоками**.
-  Контакты с другими сущностями, посадка игрока на составную модель, корабли
-  Sable и физика оторванных деталей реализуются подключающим модом.
-- `CompoundCollision.swept` непрерывно проверяет **поступательное движение**;
-  очень быстрый поворот тонкой детали между двумя положениями ограничивается
-  частотой подшагов.
-- Библиотека не загружает чанки и не синхронизирует углы по сети сама. Мод,
-  владеющий сущностью, отвечает за её сохранение, сетевую синхронизацию и
-  правила жизни за пределом прогрузки.
-- `onImpact` только сообщает об ударе. Взрыв, повреждение или звук решает аддон.
+- The generic simulation handles block collisions. Another mod must integrate
+  entity-to-entity contacts, passengers and moving external structures.
+- Swept collision is continuous for translation; fast rotation still needs
+  substeps.
+- The library does not issue chunk tickets or synchronize arbitrary adapter
+  state. The vehicle mod owns persistence and networking for its own bodies.
+- An impact callback reports the contact; explosions, damage and sounds belong
+  to the vehicle mod.
 
-Эти ограничения особенно важны при разработке боеприпасов и транспортных
-средств. Подробные требования к адаптеру разобраны в [документации API](docs/API_RU.md).
+## Verification and license
 
-## Проверка проекта
+The project builds on both supported NeoForge endpoints. The standalone
+`verification/LibraryPhysicsTest.java` checks manual and geometric aero,
+asymmetric wings, mass, fall drag and thin-part collision. Runtime behavior
+should also be checked in a real game instance before a production modpack.
 
-Для проекта настроена CI-сборка на обеих граничных версиях NeoForge.
-Локально успешно собирались `21.1.219` и `21.1.251`. Прямой тест
-`verification/LibraryPhysicsTest.java` проверяет ручную и автоматическую
-аэродинамику, распознавание крыльев, крен после потери крыла, влияние массы,
-сопротивление при падении и контакт тонкой детали при быстром падении.
-Сборка Create: The Air War с этой библиотекой тоже прошла. Запуск Minecraft
-после интеграции пока не входит в эти проверки.
-
-## Лицензия и происхождение
-
-Код библиотеки — **GPL-3.0-only**. Файлы `LICENSE` и `NOTICE` включены в проект.
-Общие расчёты перенесены из Create: The Air War, который распространяется под
-той же лицензией. Шаблон проекта взят из
-[официального NeoForge MDK](https://github.com/NeoForgeMDKs/MDK-1.21.1-NeoGradle).
+Source code is **GPL-3.0-only**. `LICENSE` and `NOTICE` are included in the
+project and built JAR. The project began from the
+[NeoForge MDK](https://github.com/NeoForgeMDKs/MDK-1.21.1-NeoGradle).

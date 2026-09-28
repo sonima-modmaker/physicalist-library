@@ -1,0 +1,7 @@
+{
+  "itemGroup.physicalist_library": "Physicalist Library",
+  "item.physicalist_library.physics_wand": "Physics Wand",
+  "item.physicalist_library.assembler": "Block Assembler",
+  "item.physicalist_library.deleter": "Physical Entity Deleter",
+  "entity.physicalist_library.physical_block": "Physical Block"
+}
