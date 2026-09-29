@@ -16,6 +16,7 @@ public final class PhysicalistLibrary {
         PhysicalistContent.ITEMS.register(modBus);
         PhysicalistContent.ENTITIES.register(modBus);
         PhysicalistContent.TABS.register(modBus);
+        modBus.addListener(PhysicalistNetwork::register);
         NeoForge.EVENT_BUS.addListener(PhysicalistCommands::register);
     }
 }

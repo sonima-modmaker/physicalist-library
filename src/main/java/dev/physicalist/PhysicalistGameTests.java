@@ -16,6 +16,34 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 @GameTestHolder(PhysicalistLibrary.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class PhysicalistGameTests {
+    @GameTest(template = "empty", timeoutTicks = 110)
+    public static void assemblySettlesAndWakesOnPush(GameTestHelper helper) {
+        var level = helper.getLevel();
+        BlockPos floor = helper.absolutePos(new BlockPos(1, 2, 1));
+        BlockPos source = floor.above(4);
+        level.setBlock(floor, Blocks.STONE.defaultBlockState(), 3);
+        level.setBlock(source, Blocks.STONE.defaultBlockState(), 3);
+        var entity = PhysicalBlockEntity.fromBlock(level, source, level.getBlockState(source));
+        helper.assertTrue(entity != null, "Could not assemble falling test body");
+        level.setBlock(source, Blocks.AIR.defaultBlockState(), 3);
+        helper.assertTrue(level.addFreshEntity(entity), "Could not spawn falling test body");
+        helper.runAfterDelay(65, () -> {
+            Vec3 settled = entity.position();
+            helper.runAfterDelay(10, () -> {
+                helper.assertTrue(entity.position().distanceToSqr(settled) < 1e-5
+                                && entity.getDeltaMovement().lengthSqr() < 1e-5,
+                        "Assembly still rocks instead of resting on the block");
+                entity.setDeltaMovement(new Vec3(.3, .2, 0));
+                helper.runAfterDelay(4, () -> {
+                    helper.assertTrue(entity.position().distanceToSqr(settled) > .01,
+                            "Sleeping assembly did not wake after a push");
+                    entity.discard();
+                    helper.succeed();
+                });
+            });
+        });
+    }
+
     @GameTest(template = "empty")
     public static void toolsSelectActualCollisionPart(GameTestHelper helper) {
         var wing = new CompoundCollision.Box(new Vec3(3, 3, 3),

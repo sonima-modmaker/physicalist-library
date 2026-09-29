@@ -46,11 +46,44 @@ public final class PhysicsWandItem extends Item {
             target.physicalistDrag(player, goal);
             return;
         }
-        Vec3 wanted = goal.subtract(entity.position()).scale(.35).subtract(entity.getDeltaMovement().scale(.65));
-        if (wanted.length() > 3) wanted = wanted.normalize().scale(3);
-        entity.setDeltaMovement(entity.getDeltaMovement().add(wanted));
-        body.setAngularVelocity(body.angularVelocity().scale(.6));
+        Vec3 wanted = goal.subtract(entity.position()).scale(.22)
+                .subtract(entity.getDeltaMovement().scale(.58));
+        if (wanted.length() > 2) wanted = wanted.normalize().scale(2);
+        // Cancel the solver's gravity while held so the body can actually settle at the cursor.
+        entity.setDeltaMovement(entity.getDeltaMovement().add(wanted)
+                .add(0, body.profile().gravity(), 0));
+        Vec3 angular = body.angularVelocity().scale(.45);
+        body.setAngularVelocity(angular.lengthSqr() < 1e-6 ? Vec3.ZERO : angular);
         entity.hasImpulse = true;
+    }
+
+    static void adjustDistance(Player player, float direction) {
+        if (!(player.level() instanceof ServerLevel server)) return;
+        var data = player.getPersistentData();
+        if (!data.hasUUID(TARGET)) return;
+        Entity entity = server.getEntity(data.getUUID(TARGET));
+        if (entity == null || PhysicalistBodies.find(entity) == null) return;
+        double distance = data.getDouble(DISTANCE);
+        data.putDouble(DISTANCE, Math.clamp(distance + Math.signum(direction)
+                * Math.max(.25, distance * .1), 1, 256));
+    }
+
+    static void rotate(Player player, float yaw, float pitch) {
+        if (!(player.level() instanceof ServerLevel server)) return;
+        var data = player.getPersistentData();
+        if (!data.hasUUID(TARGET)) return;
+        Entity entity = server.getEntity(data.getUUID(TARGET));
+        if (entity == null) return;
+        PhysicsBody body = PhysicalistBodies.find(entity);
+        if (body == null) return;
+        yaw = Math.clamp(yaw, -12, 12);
+        pitch = Math.clamp(pitch, -12, 12);
+        if (entity instanceof PhysicalistRotatable rotatable) rotatable.physicalistRotate(player, yaw, pitch);
+        else {
+            body.rotate(new Vec3(Math.toRadians(pitch), -Math.toRadians(yaw), 0), 1);
+            body.setAngularVelocity(Vec3.ZERO);
+            entity.hasImpulse = true;
+        }
     }
 
     @Override public void releaseUsing(ItemStack stack, Level level, LivingEntity user, int remaining) {

@@ -12,7 +12,8 @@ import net.minecraft.world.phys.Vec3;
  * adapter that suppresses the entity's ordinary movement for that tick.
  */
 public final class PhysicalistSimulation {
-    private record Obstacle(AABB bounds, CompoundCollision.Box box) {}
+    private record Obstacle(AABB bounds, CompoundCollision.Box box, Vec3 velocity,
+                            java.util.function.BiConsumer<Vec3, Vec3> reaction) {}
 
     public static void step(PhysicsBody body) {
         Entity entity = body.entity();
@@ -74,6 +75,7 @@ public final class PhysicalistSimulation {
             List<Obstacle> nearby = cachedObstacles != null ? cachedObstacles
                     : obstacles(level, entity, pathBounds(before, next, sweepRadius));
             CompoundCollision.Contact best = null;
+            Obstacle bestObstacle = null;
             int bestPart = -1;
             for (int part = 0; part < newBoxes.size(); part++) {
                 var end = newBoxes.get(part);
@@ -92,6 +94,7 @@ public final class PhysicalistSimulation {
                     if (hit != null && (best == null || hit.depth() > best.depth())) {
                         best = hit;
                         bestPart = part;
+                        bestObstacle = obstacle;
                     }
                 }
             }
@@ -106,7 +109,8 @@ public final class PhysicalistSimulation {
                         + bounds.getYsize() * bounds.getYsize()
                         + bounds.getZsize() * bounds.getZsize()) / 12);
                 double inverseInertia = 1 / inertia;
-                double closing = velocity.add(angular.cross(arm)).dot(normal);
+                double closing = velocity.add(angular.cross(arm))
+                        .subtract(bestObstacle.velocity()).dot(normal);
                 double inward = Math.max(0, -closing);
                 if (inward >= p.minimumImpactSpeed()) {
                     body.onImpact(bestPart, best, inward);
@@ -119,7 +123,8 @@ public final class PhysicalistSimulation {
                     Vec3 impulse = normal.scale(impulseSize);
                     velocity = velocity.add(impulse.scale(inverseMass));
                     angular = angular.add(arm.cross(impulse).scale(inverseInertia));
-                    Vec3 tangent = velocity.add(angular.cross(arm));
+                    if (bestObstacle.reaction() != null) bestObstacle.reaction().accept(best.point(), impulse);
+                    Vec3 tangent = velocity.add(angular.cross(arm)).subtract(bestObstacle.velocity());
                     tangent = tangent.subtract(normal.scale(tangent.dot(normal)));
                     if (tangent.lengthSqr() > 1e-10) {
                         Vec3 direction = tangent.normalize();
@@ -169,7 +174,7 @@ public final class PhysicalistSimulation {
             AABB start = bounds(part);
             AABB corridor = start.minmax(start.move(travel)).inflate(radius * turn + 1e-4);
             for (Obstacle obstacle : obstacles) {
-                if (corridor.intersects(obstacle.bounds())) return false;
+                if (corridor.intersects(obstacle.bounds().inflate(obstacle.velocity().length()))) return false;
             }
         }
         return true;
@@ -178,8 +183,12 @@ public final class PhysicalistSimulation {
     private static List<Obstacle> obstacles(ServerLevel level, Entity entity, AABB search) {
         List<Obstacle> result = new ArrayList<>();
         for (var shape : level.getBlockCollisions(entity, search)) {
-            for (AABB block : shape.toAabbs()) result.add(new Obstacle(block, CompoundCollision.box(block)));
+            for (AABB block : shape.toAabbs()) result.add(new Obstacle(block, CompoundCollision.box(block),
+                    Vec3.ZERO, null));
         }
+        for (var collider : PhysicalistExternalCollisions.gather(level, entity, search))
+            result.add(new Obstacle(bounds(collider.box()), collider.box(), collider.velocity(),
+                    collider.reaction()));
         return result;
     }
 

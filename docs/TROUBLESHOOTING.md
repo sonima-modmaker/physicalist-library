@@ -2,7 +2,7 @@
 
 ## The game reports a missing or incompatible library
 
-Install `physicalist_library-0.4.1.jar` in the **same instance** as the
+Install `physicalist_library-0.5.0.jar` in the **same instance** as the
 dependent mod. Remove older Physicalist JARs from `mods`; multiple versions
 share one mod ID. Do not install the `-sources.jar`. Check Minecraft 1.21.1,
 NeoForge 21.1.219–21.1.251, and the dependent mod's `versionRange`.
@@ -40,9 +40,13 @@ broadphase bounding box and hold right click. A body passed through
 simulating. If a mod uses only individual Physicalist math helpers, its
 entity must implement `PhysicalistBodyProvider` to expose a `PhysicsBody`.
 An unrelated vanilla entity is intentionally not selectable.
+While holding a body, scroll to change its distance and hold Tab while moving
+the mouse to rotate it. If these controls do not respond, check that the
+Physicalist Wand itself is being used and that both client and server have
+the same 0.5.0 build.
 
 For Create: The Air War rockets or debris, update **both** mods: Physicalist
-Library 0.4.0 or newer and a Create: The Air War build compiled against it.
+Library 0.5.0 or newer and a Create: The Air War build compiled against it.
 The older Create: The Air War build does not expose its physical projectiles
 to the wand, deleter or `/physicalist` commands. Only loaded entities can be
 selected; `/physicalist list` shows which bodies the tools can currently see.
@@ -87,6 +91,10 @@ simulation. Ensure client code interpolates server state rather than
 running independent physics. Lower excessive restitution or contact slop
 only after confirming there is a single owning motion step. For bodies
 created from blocks, compare the source voxel shape with the visible block.
+Supported block assemblies now dissipate low-speed contact motion and sleep
+after settling. A new push or a moving external collider wakes them. If a
+Sable ship passes through one, use the current Create: The Air War build with
+the Sable bridge; the library alone cannot inspect Sable's ship blocks.
 
 ## Damaged wings do not affect flight
 

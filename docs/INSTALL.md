@@ -8,7 +8,7 @@
 | NeoForge | 21.1.219 through 21.1.251 |
 | Java | 21 or newer runtime supporting Minecraft 1.21.1; Java 21 target for builds |
 | Mod ID | `physicalist_library` |
-| Library version | 0.4.1 |
+| Library version | 0.5.0 |
 | Create, Veil, Sable, IVR | No runtime dependency in this library |
 
 The NeoForge metadata uses `[21.1.219,21.1.252)`. A successful build on
@@ -17,7 +17,7 @@ both endpoints does not prove behavior on every intermediate release.
 ## For players and servers
 
 1. Install Minecraft 1.21.1 and a supported NeoForge release.
-2. Download `physicalist_library-0.4.1.jar` from the
+2. Download `physicalist_library-0.5.0.jar` from the
    [GitHub releases](https://github.com/sonima-modmaker/physicalist-library/releases).
 3. Put **one** copy in the instance's `mods` directory. Remove earlier
    Physicalist versions from that directory; two versions share a mod ID.
@@ -29,7 +29,9 @@ In Prism Launcher, each instance has its own `minecraft/mods` directory.
 The source JAR is for IDEs, not for the playable `mods` directory.
 
 The creative tab contains the Physics Wand, Block Assembler and Physical
-Entity Deleter. The tools work in creative mode. The commands require
+Entity Deleter. Hold right click with the wand to drag, scroll to change
+distance, or hold Tab and move the mouse to rotate the held object. The tools
+work in creative mode. The commands require
 operator level 2. See [API and in-game tools](API.md#creative-tools-and-commands).
 
 ## Build from source
@@ -51,7 +53,7 @@ On Linux/macOS:
 ```
 
 The default build targets the lower endpoint, NeoForge 21.1.219. Its playable
-output is `build/libs/physicalist_library-0.4.1.jar`. The second command
+output is `build/libs/physicalist_library-0.5.0.jar`. The second command
 checks the upper endpoint. Both builds target Java 21 bytecode. GitHub Actions
 runs the same version matrix on pushes and pull requests.
 
@@ -66,7 +68,7 @@ For a local NeoGradle project, put the playable JAR in `libs` and add:
 
 ```groovy
 dependencies {
-    implementation(files("libs/physicalist_library-0.4.1.jar"))
+    implementation(files("libs/physicalist_library-0.5.0.jar"))
 }
 ```
 
@@ -76,7 +78,7 @@ Declare a runtime dependency in your mod metadata:
 [[dependencies.your_mod_id]]
 modId="physicalist_library"
 type="required"
-versionRange="[0.4.0,)"
+versionRange="[0.5.0,)"
 ordering="AFTER"
 side="BOTH"
 ```
@@ -92,6 +94,6 @@ If you are integrating IVR or any other vehicle mod, use
 does not change existing vehicles automatically.
 
 Create: The Air War needs a build compiled against Physicalist Library
-0.4.0 or later for the Physicalist Wand, Deleter and `/physicalist` selection
-to recognize its active rockets and debris. Replacing only the library JAR
-cannot add that integration to an older Create: The Air War JAR.
+0.5.0 or later for the Sable moving-ship bridge and current wand controls.
+Replacing only the library JAR cannot add that integration to an older
+Create: The Air War JAR. Remove previous library JARs before launching.

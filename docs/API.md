@@ -161,6 +161,10 @@ collision boxes. Blocks with block entities or fluid states are rejected.
 The **Physical Entity Deleter** removes the aimed body without returning its
 source blocks. The wand and deleter select the actual oriented collision
 parts, rather than empty space within the entity's broadphase box.
+While holding a body with the Physics Wand, scroll to change the grab distance
+(1–256 blocks). Hold Tab and move the mouse to rotate it while camera motion
+is locked. A vehicle with its own orientation rules can implement
+`PhysicalistRotatable` to handle that input.
 
 Operator commands (permission level 2):
 
@@ -200,8 +204,13 @@ returns to rest, and saves that state.
 
 The built-in simulation checks world blocks and applies both linear and
 angular impact impulses. The built-in block assembly also handles nearby
-entity pushes and walking contact. Generic vehicle adapters still own Sable
-ship contacts and any specialized entity-to-entity solver. `onImpact` does
-not create explosions or sounds.
+entity pushes and walking contact. When a moving-world integration is present,
+it can register a `PhysicalistExternalCollisions.Provider`. Its `gather` method
+returns world-space OBBs and velocities for the swept body bounds; a collider's
+optional reaction callback receives the contact point and impulse so the
+moving structure can respond. Create: The Air War registers this provider for
+Sable ships. The library itself has no Sable runtime dependency. Other vehicle
+adapters still own specialized entity-to-entity solvers. `onImpact` does not
+create explosions or sounds.
 See [configuration](CONFIG.md) and [troubleshooting](TROUBLESHOOTING.md)
 before tuning large numbers of fast-moving bodies.
