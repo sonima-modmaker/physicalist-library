@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b1113">
+  <meta name="description" content="Physicalist Library brings compound collision, automatic aerodynamics, hinges, and creative physics tools to Minecraft 1.21.1 on NeoForge.">
+  <meta property="og:title" content="Physicalist Library — Physics with shape">
+  <meta property="og:description" content="A standalone physics mod and API for Minecraft 1.21.1 on NeoForge.">
+  <meta property="og:type" content="website">
+  <title>Physicalist Library — Physics with shape</title>
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <div class="site-shell">
+    <header class="site-header">
+      <a class="brand" href="#top" aria-label="Physicalist Library home">
+        <span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span>
+        <span>PHYSICALIST<span class="brand-light"> LIBRARY</span></span>
+      </a>
+      <nav class="main-nav" aria-label="Main navigation">
+        <a href="#features">Features</a>
+        <a href="#tools">Tools</a>
+        <a href="#developers">Developers</a>
+        <a href="#install">Install</a>
+      </nav>
+      <a class="header-github" href="https://github.com/sonima-modmaker/physicalist-library" target="_blank" rel="noopener noreferrer">View source <span aria-hidden="true">↗</span></a>
+    </header>
+
+    <main id="main">
+      <section class="hero" id="top" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <div class="eyebrow"><span class="status-dot" aria-hidden="true"></span> MINECRAFT 1.21.1 <span class="eyebrow-divider">/</span> NEOFORGE</div>
+          <h1 id="hero-title">Physics<br>with <em>shape.</em></h1>
+          <p class="hero-lede">Make the geometry matter. Physicalist Library gives Minecraft mods compound collision, aerodynamic forces, hinges, and physical bodies you can actually move.</p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="https://github.com/sonima-modmaker/physicalist-library/releases/download/v0.5.0/physicalist_library-0.5.0.jar">Download v0.5.0 <span aria-hidden="true">↓</span></a>
+            <a class="button button-quiet" href="https://github.com/sonima-modmaker/physicalist-library/blob/main/docs/INSTALL.md">Installation guide <span aria-hidden="true">↗</span></a>
+          </div>
+          <p class="hero-note">Standalone library and creative tools. Vehicle mods opt in through the API.</p>
+        </div>
+        <div class="hero-visual" aria-label="Illustration of a physical body with collision geometry and aerodynamic forces" role="img">
+          <div class="visual-topline"><span>SIMULATION VIEW</span><span>BODY 001 <i aria-hidden="true"></i></span></div>
+          <svg viewBox="0 0 620 530" aria-hidden="true" focusable="false">
+            <defs>
+              <linearGradient id="panel" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#162b2d"/><stop offset="1" stop-color="#102021"/></linearGradient>
+              <linearGradient id="wing" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#d0f894"/><stop offset="1" stop-color="#7eaa6c"/></linearGradient>
+              <linearGradient id="body" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#c5d4bd"/><stop offset="1" stop-color="#617f73"/></linearGradient>
+              <radialGradient id="glow"><stop stop-color="#b7f467" stop-opacity=".18"/><stop offset="1" stop-color="#b7f467" stop-opacity="0"/></radialGradient>
+            </defs>
+            <ellipse cx="310" cy="282" rx="264" ry="206" fill="url(#glow)"/>
+            <g stroke="#42615b" stroke-width="1" opacity=".45">
+              <path d="M50 395 306 518 570 390 312 267Z" fill="none"/>
+              <path d="m96 418 262-125M142 440l260-125M189 463l259-127M235 485l261-127M282 508l260-127"/>
+              <path d="m98 373 258 125M147 347l260 126M198 322l260 126M249 296l258 126"/>
+            </g>
+            <g transform="translate(310 257) rotate(-18)">
+              <path d="M-110 -13-12 -30 122 -14 148 0 122 14-12 30-110 13Z" fill="url(#body)" stroke="#e3f6da" stroke-width="2"/>
+              <path d="M-24 -23-113 -101-54 -110 37 -28Z" fill="url(#wing)" stroke="#edffd7" stroke-width="2"/>
+              <path d="M-24 23-113 101-54 110 37 28Z" fill="#8cb380" stroke="#dbf0ca" stroke-width="2"/>
+              <path d="M-87 -16-137 -48-127 -53-57 -25Z" fill="#7c9d88"/>
+              <path d="M-87 16-137 48-127 53-57 25Z" fill="#6c8b79"/>
+              <path d="M-120 -14-158 -14-175 0-158 14-120 14Z" fill="#1f3c3e"/>
+              <path d="M-178 -9c-36-8-60-2-98 9 38 11 62 17 98 9Z" fill="#b7f467" opacity=".48"/>
+              <path d="M-177 -4c-24-4-45 0-65 4 20 4 41 8 65 4Z" fill="#e9ffd0"/>
+              <g fill="none" stroke="#adf36f" stroke-width="2" stroke-dasharray="8 6" opacity=".92">
+                <path d="M-177 -22-16 -44 166 -22 166 22-16 44-177 22Z"/>
+                <path d="M-129 -120-44 -130 47 -32 47 32-44 130-129 120Z"/>
+              </g>
+              <circle cx="-3" cy="0" r="5" fill="#d9ffad"/>
+              <path d="M-3-33V33M-36 0h66" stroke="#d9ffad" opacity=".6"/>
+            </g>
+            <g fill="none" stroke="#aee77d" stroke-width="1.5">
+              <path d="M348 151 424 103h119"/><circle cx="348" cy="151" r="4" fill="#aee77d"/>
+              <path d="M194 365 132 413H35"/><circle cx="194" cy="365" r="4" fill="#aee77d"/>
+            </g>
+            <g fill="#dcecd9" font-family="ui-monospace, monospace" font-size="12" letter-spacing="1.4">
+              <text x="426" y="92">COMPOUND BODY</text><text x="36" y="434">CONTACT VOLUME</text>
+            </g>
+            <path d="M412 296c26 26 50 58 50 91" fill="none" stroke="#d0f894" stroke-width="2" stroke-dasharray="5 7"/>
+            <path d="m453 374 9 13 8-13" fill="none" stroke="#d0f894" stroke-width="2"/>
+            <text x="465" y="407" fill="#d0f894" font-family="ui-monospace, monospace" font-size="11" letter-spacing="1.2">LIFT + DRAG</text>
+          </svg>
+          <div class="visual-bottomline"><span>OBB CONTACT ACTIVE</span><span>SERVER STEP / 20 TPS</span></div>
+        </div>
+      </section>
+
+      <section class="spec-strip" aria-label="Project facts">
+        <div><strong>1.21.1</strong><span>Minecraft</span></div>
+        <div><strong>21.1.219–251</strong><span>NeoForge range</span></div>
+        <div><strong>07</strong><span>Server GameTests</span></div>
+        <div><strong>GPL-3.0</strong><span>Open source</span></div>
+      </section>
+
+      <section class="section" id="features" aria-labelledby="features-title">
+        <div class="section-heading"><div><span class="kicker">01 / THE ENGINE</span><h2 id="features-title">Built for contact.<br><span>Built for motion.</span></h2></div><p>Use the pieces you need, or step an entire physical body on the server.</p></div>
+        <div class="feature-grid">
+          <article class="feature-card"><span class="feature-number">01</span><div class="feature-icon icon-box" aria-hidden="true"></div><h3>Compound collision</h3><p>Oriented boxes follow real model parts. Swept checks catch fast contacts with thin geometry.</p></article>
+          <article class="feature-card"><span class="feature-number">02</span><div class="feature-icon icon-wing" aria-hidden="true"></div><h3>Automatic aerodynamics</h3><p>Thin collision volumes can become lifting surfaces with drag, torque, and fall behavior.</p></article>
+          <article class="feature-card"><span class="feature-number">03</span><div class="feature-icon icon-orbit" aria-hidden="true"></div><h3>Rigid-body motion</h3><p>One server-side step integrates velocity, rotation, world contact, and impact response.</p></article>
+          <article class="feature-card"><span class="feature-number">04</span><div class="feature-icon icon-hinge" aria-hidden="true"></div><h3>Hinges &amp; folding</h3><p>Drive moving parts with torque, limits, resistance, and contact-driven pressure.</p></article>
+          <article class="feature-card"><span class="feature-number">05</span><div class="feature-icon icon-world" aria-hidden="true"></div><h3>Moving worlds</h3><p>Optional external collision providers connect moving structures, including Sable ships through Create: The Air War.</p></article>
+          <article class="feature-card"><span class="feature-number">06</span><div class="feature-icon icon-cursor" aria-hidden="true"></div><h3>Debuggable geometry</h3><p>See every assembled collision part as a green outline with F3+B.</p></article>
+        </div>
+      </section>
+
+      <section class="tools-section" id="tools" aria-labelledby="tools-title">
+        <div class="tools-copy"><span class="kicker">02 / HANDS ON</span><h2 id="tools-title">Try physics<br><span>inside the game.</span></h2><p>No adapter needed to experiment. The creative tab includes three tools for building, moving, and removing physical objects.</p><a class="text-link" href="https://github.com/sonima-modmaker/physicalist-library/blob/main/docs/API.md#creative-tools-and-commands">All tools and commands <span aria-hidden="true">↗</span></a></div>
+        <div class="tool-list">
+          <article class="tool-row"><span class="tool-index">01</span><div><h3>Block Assembler</h3><p>Select two opposite corners to make one body from real block shapes. Supports up to 128 blocks.</p></div><span class="tool-symbol" aria-hidden="true">▧</span></article>
+          <article class="tool-row"><span class="tool-index">02</span><div><h3>Physics Wand</h3><p>Hold right click to grab. Scroll to change distance. Hold Tab and move the mouse to rotate.</p></div><span class="tool-symbol" aria-hidden="true">✣</span></article>
+          <article class="tool-row"><span class="tool-index">03</span><div><h3>Entity Deleter</h3><p>Point at a physical body and remove it with one click.</p></div><span class="tool-symbol" aria-hidden="true">⌫</span></article>
+        </div>
+      </section>
+
+      <section class="section developer-section" id="developers" aria-labelledby="developers-title">
+        <div class="section-heading"><div><span class="kicker">03 / FOR MOD MAKERS</span><h2 id="developers-title">Give your models<br><span>something to feel.</span></h2></div><p>Keep your own engines, guidance, rendering, and damage logic. Connect the body you already have.</p></div>
+        <div class="developer-panel">
+          <div class="code-panel"><div class="code-title"><span class="code-dots" aria-hidden="true">● ● ●</span><span>server tick</span></div><pre><code><span class="code-comment">// Provide shape, pose, and angular velocity.</span>
+PhysicsBody body = vehicle.physicsBody();
+
+<span class="code-comment">// One physical step on the server.</span>
+PhysicalistSimulation.step(body);</code></pre></div>
+          <div class="developer-details"><div><span class="detail-label">COMPOSE</span><h3>Adopt only what fits</h3><p>Use compound collision, auto-aero, hinges, or the complete simulation independently.</p></div><div><span class="detail-label">INTEGRATE</span><h3>Your vehicle stays yours</h3><p>The adapter owns persistence, network state, engines, guidance, and specialized effects.</p></div><a class="text-link" href="https://github.com/sonima-modmaker/physicalist-library/blob/main/docs/API.md">Explore the API <span aria-hidden="true">↗</span></a></div>
+        </div>
+      </section>
+
+      <section class="install-section" id="install" aria-labelledby="install-title"><div><span class="kicker">04 / GET STARTED</span><h2 id="install-title">Make it move.</h2><p>Download the playable JAR, place one copy in your instance's <code>mods</code> folder, and launch Minecraft 1.21.1 with a supported NeoForge version. Install the same compatible version on client and server.</p><div class="install-links"><a class="button button-primary" href="https://github.com/sonima-modmaker/physicalist-library/releases/download/v0.5.0/physicalist_library-0.5.0.jar">Get v0.5.0 <span aria-hidden="true">↓</span></a><a class="button button-outline" href="https://github.com/sonima-modmaker/physicalist-library/blob/main/docs/INSTALL.md">Read installation guide <span aria-hidden="true">↗</span></a></div></div><div class="install-terminal" aria-label="Installation checklist"><div class="terminal-heading"><span>INSTALL / CHECKLIST</span><span>01—03</span></div><ol><li><b>01</b> Minecraft <strong>1.21.1</strong></li><li><b>02</b> NeoForge <strong>21.1.219–251</strong></li><li><b>03</b> One <strong>physicalist_library</strong> JAR</li></ol><span class="terminal-ready"><span class="status-dot" aria-hidden="true"></span> READY TO SIMULATE</span></div></section>
+    </main>
+
+    <footer class="site-footer"><div class="footer-brand"><span class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></span><span>PHYSICALIST LIBRARY</span></div><p>Shape. Motion. Contact. Open source under GPL-3.0-only.</p><div class="footer-links"><a href="https://github.com/sonima-modmaker/physicalist-library/releases">Releases</a><a href="https://github.com/sonima-modmaker/physicalist-library/blob/main/docs/TROUBLESHOOTING.md">Help</a><a href="https://github.com/sonima-modmaker/physicalist-library">GitHub ↗</a></div></footer>
+  </div>
+</body>
+</html>

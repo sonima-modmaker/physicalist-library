@@ -1,5 +1,7 @@
 # Physicalist Library
 
+**Website:** https://sonima-modmaker.github.io/physicalist-library/
+
 Physicalist Library is a standalone physics mod and API for **Minecraft 1.21.1** on
 **NeoForge 21.1.219–21.1.251**. It provides compound collision, collision-driven
 aerodynamics, hinges, and a server-side rigid-body step for other mods. Version
