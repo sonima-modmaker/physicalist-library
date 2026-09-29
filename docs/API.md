@@ -130,7 +130,8 @@ drag and lift, integrates pose in substeps, tests world blocks, applies
 contact response and calls `onImpact` above the configured speed.
 
 The adapter owns network interpolation, saving angular velocity, loading
-faraway chunks and any entity-to-entity or moving-structure collisions.
+faraway chunks and any specialized entity-to-entity collisions. Moving-world
+contacts can be supplied through `PhysicalistExternalCollisions.Provider`.
 When a future chunk is not loaded, this generic solver stops the current
 step; it does not request a chunk ticket. The number of collision boxes
 must stay constant *within* a substep. A lost part may be represented by
