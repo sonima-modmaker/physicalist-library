@@ -21,7 +21,7 @@ entity. A vehicle mod must pass its model geometry and motion through the API.
 | Diagnose loading and physics problems | [Troubleshooting](docs/TROUBLESHOOTING.md) |
 | Read the previous Russian documentation | [Russian documentation (older version)](docs/ru/INSTALL_RU.md) |
 
-The built mod is `build/libs/physicalist_library-0.5.2.jar`. The `-sources.jar`
+The built mod is `build/libs/physicalist_library-0.5.3.jar`. The `-sources.jar`
 file is for development and must not be installed as the playable mod.
 
 ## What's included

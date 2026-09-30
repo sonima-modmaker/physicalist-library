@@ -46,6 +46,7 @@ public final class PhysicalBlockEntity extends Entity implements PhysicalistBody
     private final List<AABB> localShape = new ArrayList<>();
     private final BlockBody body = new BlockBody();
     private Vec3 localCenter = new Vec3(.5, .5, .5);
+    private Vec3 localMassCenter = new Vec3(.5, .5, .5);
     private float modelScale = 1;
     private float previousRoll;
     private float clientVisualRoll;
@@ -200,6 +201,7 @@ public final class PhysicalBlockEntity extends Entity implements PhysicalistBody
 
     private boolean supported() {
         if (!(level() instanceof net.minecraft.server.level.ServerLevel)) return false;
+        SupportFootprint footprint = new SupportFootprint();
         var boxes = body.collisionBoxes();
         double lowest = Double.POSITIVE_INFINITY;
         for (CompoundCollision.Box box : boxes) {
@@ -224,7 +226,8 @@ public final class PhysicalBlockEntity extends Entity implements PhysicalistBody
             for (VoxelShape shape : level().getBlockCollisions(this, query)) {
                 for (AABB block : shape.toAabbs()) {
                     var contact = CompoundCollision.contact(lowered, CompoundCollision.box(block));
-                    if (contact != null && contact.normal().y > .55) return true;
+                    if (contact != null && contact.normal().y > .55)
+                        footprint.include(lowered, block);
                 }
             }
             if (++checked >= 24) break;
@@ -235,7 +238,8 @@ public final class PhysicalBlockEntity extends Entity implements PhysicalistBody
                 if (collider.velocity().lengthSqr() > 1e-5) continue;
                 for (var lowered : underside) {
                     var contact = CompoundCollision.contact(lowered, collider.box());
-                    if (contact != null && contact.normal().y > .55) return true;
+                    if (contact != null && contact.normal().y > .55)
+                        footprint.include(lowered, CompoundCollision.bounds(collider.box()));
                 }
             }
         }
@@ -250,12 +254,34 @@ public final class PhysicalBlockEntity extends Entity implements PhysicalistBody
                     if (!CompoundCollision.bounds(lower).intersects(search)) continue;
                     for (CompoundCollision.Box raised : underside) {
                         var contact = CompoundCollision.contact(raised, lower);
-                        if (contact != null && contact.normal().y > .55) return true;
+                        if (contact != null && contact.normal().y > .55)
+                            footprint.include(raised, CompoundCollision.bounds(lower));
                     }
                 }
             }
         }
-        return false;
+        return footprint.supports(centerOfMass());
+    }
+
+    private static final class SupportFootprint {
+        private double minX = Double.POSITIVE_INFINITY, maxX = Double.NEGATIVE_INFINITY;
+        private double minZ = Double.POSITIVE_INFINITY, maxZ = Double.NEGATIVE_INFINITY;
+
+        private void include(CompoundCollision.Box part, AABB obstacle) {
+            AABB bounds = CompoundCollision.bounds(part);
+            double x0 = Math.max(bounds.minX, obstacle.minX);
+            double x1 = Math.min(bounds.maxX, obstacle.maxX);
+            double z0 = Math.max(bounds.minZ, obstacle.minZ);
+            double z1 = Math.min(bounds.maxZ, obstacle.maxZ);
+            if (x1 <= x0 || z1 <= z0) return;
+            minX = Math.min(minX, x0); maxX = Math.max(maxX, x1);
+            minZ = Math.min(minZ, z0); maxZ = Math.max(maxZ, z1);
+        }
+
+        private boolean supports(Vec3 center) {
+            return center.x >= minX - .08 && center.x <= maxX + .08
+                    && center.z >= minZ - .08 && center.z <= maxZ + .08;
+        }
     }
 
     private boolean movingExternalContact() {
@@ -287,9 +313,10 @@ public final class PhysicalBlockEntity extends Entity implements PhysicalistBody
                         && !(candidate instanceof PhysicalBlockEntity block && block.getId() < getId()))) {
             if (++checked > 24) break;
             if (!search.intersects(other.getBoundingBox())) continue;
-            List<CompoundCollision.Box> theirs = other instanceof PhysicalBlockEntity block
-                    ? block.physicalistBody().collisionBoxes()
-                    : List.of(CompoundCollision.box(other.getBoundingBox()));
+            PhysicsBody otherBody = other instanceof PhysicalistBodyProvider provider
+                    ? provider.physicalistBody() : null;
+            List<CompoundCollision.Box> theirs = otherBody != null
+                    ? otherBody.collisionBoxes() : List.of(CompoundCollision.box(other.getBoundingBox()));
             List<AABB> theirBounds = new ArrayList<>(theirs.size());
             for (CompoundCollision.Box part : theirs) theirBounds.add(CompoundCollision.bounds(part));
             CompoundCollision.Contact best = null;
@@ -319,24 +346,23 @@ public final class PhysicalBlockEntity extends Entity implements PhysicalistBody
                 block.quietTicks = 0;
             }
             if (correction > 0) {
-                if (other instanceof PhysicalBlockEntity block) {
+                if (otherBody != null) {
                     double mass = Math.max(.1, body.aerodynamicMass());
-                    double otherMass = Math.max(.1, block.physicalistBody().aerodynamicMass());
+                    double otherMass = Math.max(.1, otherBody.aerodynamicMass());
                     double share = otherMass / (mass + otherMass);
                     setPos(position().add(normal.scale(correction * share)));
-                    block.setPos(block.position().subtract(normal.scale(correction * (1 - share))));
+                    other.setPos(other.position().subtract(normal.scale(correction * (1 - share))));
                 } else {
                     setPos(position().add(normal.scale(correction)));
                 }
             }
             if (closing > .015) {
                 double mass = body.aerodynamicMass();
-                double otherMass = other instanceof PhysicalBlockEntity block
-                        ? block.physicalistBody().aerodynamicMass() : 1;
+                double otherMass = otherBody != null ? Math.max(.1, otherBody.aerodynamicMass()) : 1;
                 Vec3 impulse = normal.scale(closing / (1 / mass + 1 / otherMass));
                 setDeltaMovement(getDeltaMovement().add(impulse.scale(1 / mass)));
                 other.setDeltaMovement(other.getDeltaMovement().subtract(impulse.scale(1 / otherMass)));
-                Vec3 arm = best.point().subtract(position());
+                Vec3 arm = best.point().subtract(centerOfMass());
                 double inertia = Math.max(.5, mass * collisionRadius * collisionRadius);
                 if (closing > .08)
                     body.angular = body.angular.add(arm.cross(impulse).scale(1 / inertia));
@@ -374,6 +400,12 @@ public final class PhysicalBlockEntity extends Entity implements PhysicalistBody
         return new Vec3(transformed.x(), transformed.y(), transformed.z());
     }
 
+    private Vec3 massOffset() {
+        return rotate(orientation(), localMassCenter.subtract(localCenter).scale(physicalistScale()));
+    }
+
+    private Vec3 centerOfMass() { return position().add(massOffset()); }
+
     private final class BlockBody implements PhysicsBody {
         private Vec3 angular = Vec3.ZERO;
         private Vec3 cachedPosition;
@@ -383,6 +415,7 @@ public final class PhysicalBlockEntity extends Entity implements PhysicalistBody
 
         private void invalidateCollisionCache() { cachedBoxes = null; }
         @Override public Entity entity() { return PhysicalBlockEntity.this; }
+        @Override public Vec3 centerOfMass() { return PhysicalBlockEntity.this.centerOfMass(); }
         @Override public List<CompoundCollision.Box> collisionBoxes() {
             Vec3 position = position();
             float yaw = getYRot(), pitch = getXRot(), currentRoll = roll();
@@ -416,20 +449,31 @@ public final class PhysicalBlockEntity extends Entity implements PhysicalistBody
             return Math.max(.1, parts.size() * Math.pow(physicalistScale(), 3));
         }
         @Override public void rotate(Vec3 value, double fraction) {
+            Vec3 massCenter = centerOfMass();
             setXRot(getXRot() + (float) Math.toDegrees(value.x * fraction));
             setYRot(getYRot() - (float) Math.toDegrees(value.y * fraction));
             entityData.set(ROLL, roll() + (float) Math.toDegrees(value.z * fraction));
+            setPos(massCenter.subtract(massOffset()));
         }
     }
 
     private void updateCollisionRadius() {
         double radius = .1;
+        double mass = 0, xMass = 0, yMass = 0, zMass = 0;
         for (AABB box : localShape) {
+            double volume = box.getXsize() * box.getYsize() * box.getZsize();
+            Vec3 center = box.getCenter();
+            mass += volume;
+            xMass += center.x * volume;
+            yMass += center.y * volume;
+            zMass += center.z * volume;
             double x = Math.max(Math.abs(box.minX - localCenter.x), Math.abs(box.maxX - localCenter.x));
             double y = Math.max(Math.abs(box.minY - localCenter.y), Math.abs(box.maxY - localCenter.y));
             double z = Math.max(Math.abs(box.minZ - localCenter.z), Math.abs(box.maxZ - localCenter.z));
             radius = Math.max(radius, Math.sqrt(x * x + y * y + z * z));
         }
+        localMassCenter = mass > 1e-8
+                ? new Vec3(xMass / mass, yMass / mass, zMass / mass) : localCenter;
         collisionRadius = radius + .05;
     }
 

@@ -10,6 +10,8 @@ import net.minecraft.world.phys.Vec3;
  */
 public interface PhysicsBody {
     Entity entity();
+    /** World-space centre of mass; defaults to the entity anchor for existing adapters. */
+    default Vec3 centerOfMass() { return entity().position(); }
     List<CompoundCollision.Box> collisionBoxes();
     Vec3 forward();
     Vec3 up();

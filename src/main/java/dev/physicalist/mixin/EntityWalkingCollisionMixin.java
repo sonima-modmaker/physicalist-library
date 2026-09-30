@@ -16,11 +16,14 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 /** Includes physical parts in vanilla movement and applies blocked player pushes. */
 @Mixin(Entity.class)
 public abstract class EntityWalkingCollisionMixin {
-    @Inject(method = "collide", at = @At("RETURN"))
+    @Inject(method = "collide", at = @At("RETURN"), cancellable = true)
     private void physicalist$pushBlockedBody(Vec3 wanted, CallbackInfoReturnable<Vec3> result) {
         Entity entity = (Entity) (Object) this;
         if (!(entity instanceof Player player) || player.isSpectator()) return;
-        PhysicalistWalkingCollision.pushBlocked(player, wanted, result.getReturnValue());
+        Vec3 resolved = PhysicalistWalkingCollision.clipPlayerMovement(player, wanted,
+                result.getReturnValue());
+        PhysicalistWalkingCollision.pushBlocked(player, wanted, resolved);
+        result.setReturnValue(resolved);
     }
 
     @Inject(method = "collectColliders", at = @At("RETURN"), cancellable = true)

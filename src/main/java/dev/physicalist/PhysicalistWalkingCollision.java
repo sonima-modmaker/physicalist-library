@@ -9,6 +9,7 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
+import net.minecraft.core.Direction;
 
 /** Supplies physical model surfaces to Minecraft's ordinary walking solver. */
 public final class PhysicalistWalkingCollision {
@@ -34,6 +35,21 @@ public final class PhysicalistWalkingCollision {
         return result == null ? original : result;
     }
 
+    /** Final guard for movement solvers that replace collectColliders' shape list. */
+    public static Vec3 clipPlayerMovement(Player player, Vec3 wanted, Vec3 resolved) {
+        if (player.isSpectator() || player.noPhysics) return resolved;
+        AABB bounds = player.getBoundingBox();
+        List<VoxelShape> shapes = add(List.of(), player, wanted,
+                bounds.expandTowards(wanted).inflate(.06), player.level());
+        if (shapes.isEmpty()) return resolved;
+        double y = Shapes.collide(Direction.Axis.Y, bounds, shapes, resolved.y);
+        bounds = bounds.move(0, y, 0);
+        double x = Shapes.collide(Direction.Axis.X, bounds, shapes, resolved.x);
+        bounds = bounds.move(x, 0, 0);
+        double z = Shapes.collide(Direction.Axis.Z, bounds, shapes, resolved.z);
+        return new Vec3(x, y, z);
+    }
+
     /** A player should push only the body that actually blocked horizontal movement. */
     public static void pushBlocked(Player player, Vec3 wanted, Vec3 resolved) {
         if (player.level().isClientSide || player.isSpectator()) return;
@@ -57,7 +73,7 @@ public final class PhysicalistWalkingCollision {
                 candidate.setDeltaMovement(candidate.getDeltaMovement()
                         .add(contact.normal().scale(speed)));
                 candidate.hasImpulse = true;
-                Vec3 arm = contact.point().subtract(candidate.position());
+                Vec3 arm = contact.point().subtract(body.centerOfMass());
                 Vec3 spin = arm.cross(contact.normal().scale(speed / Math.max(1, mass)));
                 body.setAngularVelocity(body.angularVelocity().add(spin.scale(.08)));
                 break;

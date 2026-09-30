@@ -6,6 +6,7 @@ import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.MoverType;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Blocks;
@@ -35,6 +36,10 @@ public final class PhysicalistGameTests {
         double allowed = Shapes.collide(Direction.Axis.Y, player.getBoundingBox(), shapes, falling.y);
         helper.assertTrue(allowed > -.4 && allowed < -.2,
                 "Player fell through the physical body's model collision: " + allowed);
+        player.setPos(body.getX(), body.getY() + 1.2, body.getZ());
+        player.move(MoverType.SELF, new Vec3(0, -1, 0));
+        helper.assertTrue(Math.abs(player.getY() - body.getY() - .5) < .05,
+                "Minecraft's player movement ignored the physical surface: " + player.getY());
 
         player.setPos(body.getX() - .8, body.getY(), body.getZ());
         PhysicalistWalkingCollision.pushBlocked(player, new Vec3(.25, 0, 0), Vec3.ZERO);
@@ -95,6 +100,27 @@ public final class PhysicalistGameTests {
                 for (PhysicalBlockEntity body : bodies) body.discard();
                 helper.succeed();
             });
+        });
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 100)
+    public static void offCenterAssemblyTopplesInsteadOfHovering(GameTestHelper helper) {
+        var level = helper.getLevel();
+        BlockPos base = helper.absolutePos(new BlockPos(1, 2, 1));
+        level.setBlock(base.offset(4, 0, 0), Blocks.STONE.defaultBlockState(), 3);
+        List<BlockPos> structure = new java.util.ArrayList<>();
+        for (int x = 0; x < 5; x++) structure.add(base.offset(x, 1, 0));
+        for (int y = 2; y <= 4; y++) structure.add(base.offset(4, y, 0));
+        for (BlockPos pos : structure) level.setBlock(pos, Blocks.DIRT.defaultBlockState(), 3);
+        var body = PhysicalBlockEntity.fromBlocks(level, structure);
+        helper.assertTrue(body != null, "Could not assemble off-center body");
+        for (BlockPos pos : structure) level.setBlock(pos, Blocks.AIR.defaultBlockState(), 3);
+        helper.assertTrue(level.addFreshEntity(body), "Could not spawn off-center body");
+        helper.runAfterDelay(65, () -> {
+            helper.assertTrue(Math.abs(body.roll()) > 8 || Math.abs(body.getXRot()) > 8,
+                    "Assembly stayed balanced on a support outside its centre of mass");
+            body.discard();
+            helper.succeed();
         });
     }
 

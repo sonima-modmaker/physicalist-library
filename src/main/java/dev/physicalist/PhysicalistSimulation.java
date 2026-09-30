@@ -23,7 +23,7 @@ public final class PhysicalistSimulation {
         List<CompoundCollision.Box> initialBoxes = List.copyOf(body.collisionBoxes());
         Aerodynamics.Step air = body.automaticAerodynamics()
                 ? AutoAerodynamics.step(entity.getDeltaMovement(), body.angularVelocity(),
-                        body.forward(), body.up(), entity.position(), initialBoxes,
+                        body.forward(), body.up(), body.centerOfMass(), initialBoxes,
                         body.aerodynamicMass(), body.damaged(), p, body.autoAeroProfile())
                 : Aerodynamics.step(entity.getDeltaMovement(), body.angularVelocity(),
                         body.forward(), body.up(), body.wingArea(), body.wingImbalance(),
@@ -101,7 +101,7 @@ public final class PhysicalistSimulation {
             if (best != null) {
                 Vec3 normal = best.normal();
                 entity.setPos(entity.position().add(normal.scale(best.depth() + p.contactSlop())));
-                Vec3 arm = best.point().subtract(entity.position());
+                Vec3 arm = best.point().subtract(body.centerOfMass());
                 double mass = Math.max(.1, body.aerodynamicMass());
                 double inverseMass = 1 / mass;
                 AABB bounds = entity.getBoundingBox();
