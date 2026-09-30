@@ -1,11 +1,11 @@
-# Physicalist Library
+# Physicalist
 
 **Website:** https://sonima-modmaker.github.io/physicalist-library/
 
-Physicalist Library is a standalone physics mod and API for **Minecraft 1.21.1** on
+Physicalist is a standalone physics mod and API for **Minecraft 1.21.1** on
 **NeoForge 21.1.219–21.1.251**. It provides compound collision, collision-driven
 aerodynamics, hinges, and a server-side rigid-body step for other mods. Version
-**0.5.0** also includes creative-mode tools for trying the physics
+The mod also includes creative-mode tools for trying the physics
 without writing an adapter first.
 
 Installing this JAR alone does **not** replace the physics of every Minecraft
@@ -21,7 +21,7 @@ entity. A vehicle mod must pass its model geometry and motion through the API.
 | Diagnose loading and physics problems | [Troubleshooting](docs/TROUBLESHOOTING.md) |
 | Read the previous Russian documentation | [Russian documentation (older version)](docs/ru/INSTALL_RU.md) |
 
-The built mod is `build/libs/physicalist_library-0.5.0.jar`. The `-sources.jar`
+The built mod is `build/libs/physicalist_library-0.5.1.jar`. The `-sources.jar`
 file is for development and must not be installed as the playable mod.
 
 ## What's included
@@ -38,7 +38,7 @@ file is for development and must not be installed as the playable mod.
 | `PhysicalBlockEntity` | One movable rigid body assembled from selected world blocks and their voxel collision shapes; supported bodies settle and sleep |
 | `PhysicalistExternalCollisions` | Optional moving-world collision providers, including Sable integration supplied by Create: The Air War |
 
-The creative tab **Physicalist Library** contains a **Physics Wand**, **Block
+The creative tab **Physicalist** contains a **Physics Wand**, **Block
 Assembler**, and **Physical Entity Deleter**. Hold right click with the wand
 while aiming at a physical entity to drag it. Scroll to move the held body
 closer or farther away; hold Tab and move the mouse to rotate it without
@@ -90,7 +90,7 @@ the new geometric auto-aero mode is available to vehicle adapters that call
 
 **Immersive Vehicles Refurbished** is a planned integration target. There is
 no IVR adapter or runtime dependency in this repository yet, so installing
-Physicalist Library does not alter its vehicles. The projects are independent.
+Physicalist does not alter its vehicles. The projects are independent.
 
 ## Boundaries
 

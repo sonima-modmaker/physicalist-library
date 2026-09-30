@@ -1,6 +1,6 @@
 # Developer API and in-game tools
 
-Physicalist Library is an opt-in API. Vehicle mods own their entities,
+Physicalist is an opt-in API. Vehicle mods own their entities,
 engines, rendering, networking, persistent state, and damage rules. The
 library can calculate their collision and motion without importing those
 mods. Its public Java package is `dev.physicalist`.

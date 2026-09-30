@@ -41,3 +41,4 @@ repo/
 
 # Local verification output
 *.log
+__pycache__/

@@ -2,7 +2,7 @@
 
 ## The game reports a missing or incompatible library
 
-Install `physicalist_library-0.5.0.jar` in the **same instance** as the
+Install `physicalist_library-0.5.1.jar` in the **same instance** as the
 dependent mod. Remove older Physicalist JARs from `mods`; multiple versions
 share one mod ID. Do not install the `-sources.jar`. Check Minecraft 1.21.1,
 NeoForge 21.1.219–21.1.251, and the dependent mod's `versionRange`.
@@ -43,10 +43,10 @@ An unrelated vanilla entity is intentionally not selectable.
 While holding a body, scroll to change its distance and hold Tab while moving
 the mouse to rotate it. If these controls do not respond, check that the
 Physicalist Wand itself is being used and that both client and server have
-the same 0.5.0 build.
+the same 0.5.1 build.
 
 For Create: The Air War rockets or debris, update **both** mods: Physicalist
-Library 0.5.0 or newer and a Create: The Air War build compiled against it.
+Physicalist 0.5.0 or newer and a Create: The Air War build compiled against it.
 The older Create: The Air War build does not expose its physical projectiles
 to the wand, deleter or `/physicalist` commands. Only loaded entities can be
 selected; `/physicalist list` shows which bodies the tools can currently see.
