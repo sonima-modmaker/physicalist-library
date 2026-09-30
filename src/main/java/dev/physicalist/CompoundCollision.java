@@ -32,6 +32,16 @@ public final class CompoundCollision {
                 new Vec3[]{new Vec3(1, 0, 0), new Vec3(0, 1, 0), new Vec3(0, 0, 1)},
                 new double[]{b.getXsize() / 2, b.getYsize() / 2, b.getZsize() / 2});
     }
+    /** Conservative world bounds used before the more expensive oriented SAT test. */
+    public static AABB bounds(BoxView box) {
+        Vec3[] axes = box.axes();
+        double[] half = box.half();
+        double x = radius(axes, half, 1, 0, 0);
+        double y = radius(axes, half, 0, 1, 0);
+        double z = radius(axes, half, 0, 0, 1);
+        Vec3 c = box.center();
+        return new AABB(c.x - x, c.y - y, c.z - z, c.x + x, c.y + y, c.z + z);
+    }
     private static double radius(Vec3[] axes, double[] half, double x, double y, double z) {
         return half[0] * Math.abs(axes[0].x * x + axes[0].y * y + axes[0].z * z)
                 + half[1] * Math.abs(axes[1].x * x + axes[1].y * y + axes[1].z * z)

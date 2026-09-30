@@ -6,9 +6,11 @@ import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.core.Direction;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.Shapes;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
@@ -16,6 +18,32 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 @GameTestHolder(PhysicalistLibrary.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class PhysicalistGameTests {
+    @GameTest(template = "empty", timeoutTicks = 60)
+    public static void playerCanStandOnAndPushPhysicalBody(GameTestHelper helper) {
+        var level = helper.getLevel();
+        BlockPos source = helper.absolutePos(new BlockPos(1, 5, 1));
+        level.setBlock(source, Blocks.STONE.defaultBlockState(), 3);
+        PhysicalBlockEntity body = PhysicalBlockEntity.fromBlock(level, source, level.getBlockState(source));
+        helper.assertTrue(body != null, "Could not create a walkable physical body");
+        level.setBlock(source, Blocks.AIR.defaultBlockState(), 3);
+        helper.assertTrue(level.addFreshEntity(body), "Could not spawn walkable physical body");
+        var player = helper.makeMockPlayer(GameType.CREATIVE);
+        player.setPos(body.getX(), body.getY() + .8, body.getZ());
+        Vec3 falling = new Vec3(0, -1, 0);
+        var shapes = PhysicalistWalkingCollision.add(List.of(), player, falling,
+                player.getBoundingBox().expandTowards(falling), level);
+        double allowed = Shapes.collide(Direction.Axis.Y, player.getBoundingBox(), shapes, falling.y);
+        helper.assertTrue(allowed > -.4 && allowed < -.2,
+                "Player fell through the physical body's model collision: " + allowed);
+
+        player.setPos(body.getX() - .8, body.getY(), body.getZ());
+        PhysicalistWalkingCollision.pushBlocked(player, new Vec3(.25, 0, 0), Vec3.ZERO);
+        helper.assertTrue(body.getDeltaMovement().x > .01,
+                "Blocked player movement did not push the physical body");
+        body.discard();
+        helper.succeed();
+    }
+
     @GameTest(template = "empty", timeoutTicks = 110)
     public static void assemblySettlesAndWakesOnPush(GameTestHelper helper) {
         var level = helper.getLevel();
@@ -40,6 +68,32 @@ public final class PhysicalistGameTests {
                     entity.discard();
                     helper.succeed();
                 });
+            });
+        });
+    }
+
+    @GameTest(template = "empty", timeoutTicks = 150)
+    public static void stackedBodiesStopRocking(GameTestHelper helper) {
+        var level = helper.getLevel();
+        BlockPos floor = helper.absolutePos(new BlockPos(1, 2, 1));
+        level.setBlock(floor, Blocks.STONE.defaultBlockState(), 3);
+        PhysicalBlockEntity[] bodies = new PhysicalBlockEntity[2];
+        for (int i = 0; i < bodies.length; i++) {
+            BlockPos source = floor.above(i == 0 ? 3 : 5);
+            level.setBlock(source, Blocks.STONE.defaultBlockState(), 3);
+            bodies[i] = PhysicalBlockEntity.fromBlock(level, source, level.getBlockState(source));
+            helper.assertTrue(bodies[i] != null, "Could not assemble stacked body");
+            level.setBlock(source, Blocks.AIR.defaultBlockState(), 3);
+            helper.assertTrue(level.addFreshEntity(bodies[i]), "Could not spawn stacked body");
+        }
+        helper.runAfterDelay(105, () -> {
+            Vec3 lower = bodies[0].position(), upper = bodies[1].position();
+            helper.runAfterDelay(12, () -> {
+                helper.assertTrue(bodies[0].position().distanceToSqr(lower) < .0004
+                                && bodies[1].position().distanceToSqr(upper) < .0004,
+                        "Physical bodies continue rocking against one another");
+                for (PhysicalBlockEntity body : bodies) body.discard();
+                helper.succeed();
             });
         });
     }

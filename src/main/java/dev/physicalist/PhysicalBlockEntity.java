@@ -48,6 +48,8 @@ public final class PhysicalBlockEntity extends Entity implements PhysicalistBody
     private Vec3 localCenter = new Vec3(.5, .5, .5);
     private float modelScale = 1;
     private float previousRoll;
+    private float clientVisualRoll;
+    private boolean clientRollReady;
     private double collisionRadius = .9;
     private Vec3 clientTarget;
     private float clientTargetYaw, clientTargetPitch;
@@ -110,7 +112,8 @@ public final class PhysicalBlockEntity extends Entity implements PhysicalistBody
     public BlockState blockState() { return entityData.get(STATE); }
     public float roll() { return entityData.get(ROLL); }
     public float visualRoll(float partialTick) {
-        return net.minecraft.util.Mth.rotLerp(partialTick, previousRoll, roll());
+        return net.minecraft.util.Mth.rotLerp(partialTick, previousRoll,
+                level().isClientSide ? clientVisualRoll : roll());
     }
     @Override public double physicalistScale() { return entityData.get(SCALE); }
     @Override public void setPhysicalistScale(double scale) {
@@ -118,6 +121,7 @@ public final class PhysicalBlockEntity extends Entity implements PhysicalistBody
             throw new IllegalArgumentException("Scale must be between 0.1 and 16");
         modelScale = (float) scale;
         entityData.set(SCALE, modelScale);
+        body.invalidateCollisionCache();
         refreshDimensions();
     }
 
@@ -147,7 +151,14 @@ public final class PhysicalBlockEntity extends Entity implements PhysicalistBody
     }
 
     @Override public void tick() {
-        previousRoll = roll();
+        if (level().isClientSide) {
+            if (!clientRollReady) {
+                clientVisualRoll = roll();
+                clientRollReady = true;
+            }
+            previousRoll = clientVisualRoll;
+            clientVisualRoll = net.minecraft.util.Mth.rotLerp(.55f, clientVisualRoll, roll());
+        } else previousRoll = roll();
         super.tick();
         if (level().isClientSide) {
             if (clientLerpSteps > 0 && clientTarget != null) {
@@ -228,6 +239,22 @@ public final class PhysicalBlockEntity extends Entity implements PhysicalistBody
                 }
             }
         }
+        if (!underside.isEmpty()) {
+            AABB search = getBoundingBox().move(0, -.1, 0).inflate(.05);
+            for (Entity candidate : level().getEntities(this, search,
+                    entity -> entity.isAlive() && entity instanceof PhysicalistBodyProvider)) {
+                if (candidate.getDeltaMovement().lengthSqr() > .0004) continue;
+                PhysicsBody support = ((PhysicalistBodyProvider) candidate).physicalistBody();
+                if (support == null) continue;
+                for (CompoundCollision.Box lower : support.collisionBoxes()) {
+                    if (!CompoundCollision.bounds(lower).intersects(search)) continue;
+                    for (CompoundCollision.Box raised : underside) {
+                        var contact = CompoundCollision.contact(raised, lower);
+                        if (contact != null && contact.normal().y > .55) return true;
+                    }
+                }
+            }
+        }
         return false;
     }
 
@@ -245,54 +272,76 @@ public final class PhysicalBlockEntity extends Entity implements PhysicalistBody
 
     private void collideWithEntities() {
         List<CompoundCollision.Box> own = body.collisionBoxes();
+        if (own.isEmpty()) return;
+        List<AABB> partBounds = new ArrayList<>(own.size());
+        AABB tightBounds = null;
+        for (CompoundCollision.Box part : own) {
+            AABB bounds = CompoundCollision.bounds(part);
+            partBounds.add(bounds);
+            tightBounds = tightBounds == null ? bounds : tightBounds.minmax(bounds);
+        }
+        AABB search = tightBounds.inflate(.1);
         int checked = 0;
-        for (Entity other : level().getEntities(this, getBoundingBox().inflate(.1),
+        for (Entity other : level().getEntities(this, search,
                 candidate -> candidate.isAlive() && candidate.isPushable()
                         && !(candidate instanceof PhysicalBlockEntity block && block.getId() < getId()))) {
             if (++checked > 24) break;
+            if (!search.intersects(other.getBoundingBox())) continue;
             List<CompoundCollision.Box> theirs = other instanceof PhysicalBlockEntity block
                     ? block.physicalistBody().collisionBoxes()
                     : List.of(CompoundCollision.box(other.getBoundingBox()));
-            boolean resolved = false;
-            for (CompoundCollision.Box a : own) {
-                if (resolved) break;
-                for (CompoundCollision.Box b : theirs) {
+            List<AABB> theirBounds = new ArrayList<>(theirs.size());
+            for (CompoundCollision.Box part : theirs) theirBounds.add(CompoundCollision.bounds(part));
+            CompoundCollision.Contact best = null;
+            for (int i = 0; i < own.size(); i++) {
+                if (!partBounds.get(i).intersects(other.getBoundingBox())) continue;
+                CompoundCollision.Box a = own.get(i);
+                for (int j = 0; j < theirs.size(); j++) {
+                    if (!partBounds.get(i).intersects(theirBounds.get(j))) continue;
+                    CompoundCollision.Box b = theirs.get(j);
                     CompoundCollision.Contact contact = CompoundCollision.contact(a, b);
-                    if (contact == null) continue;
-                    Vec3 normal = contact.normal();
-                    if (other instanceof net.minecraft.world.entity.player.Player && Math.abs(normal.y) > .5)
-                        continue; // Walking on top must not shove the entire assembly away.
-                    sleeping = false;
-                    quietTicks = 0;
-                    if (other instanceof PhysicalBlockEntity block) {
-                        block.sleeping = false;
-                        block.quietTicks = 0;
-                    }
-                    double depth = Math.min(.25, contact.depth());
-                    if (other instanceof PhysicalBlockEntity block) {
-                        setPos(position().add(normal.scale(depth * .5)));
-                        block.setPos(block.position().subtract(normal.scale(depth * .5)));
-                    } else {
-                        setPos(position().add(normal.scale(depth)));
-                    }
-                    Vec3 relative = getDeltaMovement().subtract(other.getDeltaMovement());
-                    double closing = Math.max(0, -relative.dot(normal));
-                    if (closing > 0) {
-                        double mass = body.aerodynamicMass();
-                        double otherMass = other instanceof PhysicalBlockEntity block
-                                ? block.physicalistBody().aerodynamicMass() : 1;
-                        Vec3 impulse = normal.scale(closing / (1 / mass + 1 / otherMass));
-                        setDeltaMovement(getDeltaMovement().add(impulse.scale(1 / mass)));
-                        other.setDeltaMovement(other.getDeltaMovement().subtract(impulse.scale(1 / otherMass)));
-                        Vec3 arm = contact.point().subtract(position());
-                        double inertia = Math.max(.5, mass * collisionRadius * collisionRadius);
-                        body.angular = body.angular.add(arm.cross(impulse).scale(1 / inertia));
-                        hasImpulse = true;
-                        other.hasImpulse = true;
-                    }
-                    resolved = true;
-                    break;
+                    if (contact == null
+                            || other instanceof net.minecraft.world.entity.player.Player
+                                    && contact.normal().y > .5) continue;
+                    if (best == null || contact.depth() > best.depth()) best = contact;
                 }
+            }
+            if (best == null) continue;
+            Vec3 normal = best.normal();
+            Vec3 relative = getDeltaMovement().subtract(other.getDeltaMovement());
+            double closing = Math.max(0, -relative.dot(normal));
+            double correction = Math.min(.08, Math.max(0, best.depth() - .012) * .35);
+            if (correction < .002 && closing < .025) continue;
+            sleeping = false;
+            quietTicks = 0;
+            if (other instanceof PhysicalBlockEntity block) {
+                block.sleeping = false;
+                block.quietTicks = 0;
+            }
+            if (correction > 0) {
+                if (other instanceof PhysicalBlockEntity block) {
+                    double mass = Math.max(.1, body.aerodynamicMass());
+                    double otherMass = Math.max(.1, block.physicalistBody().aerodynamicMass());
+                    double share = otherMass / (mass + otherMass);
+                    setPos(position().add(normal.scale(correction * share)));
+                    block.setPos(block.position().subtract(normal.scale(correction * (1 - share))));
+                } else {
+                    setPos(position().add(normal.scale(correction)));
+                }
+            }
+            if (closing > .015) {
+                double mass = body.aerodynamicMass();
+                double otherMass = other instanceof PhysicalBlockEntity block
+                        ? block.physicalistBody().aerodynamicMass() : 1;
+                Vec3 impulse = normal.scale(closing / (1 / mass + 1 / otherMass));
+                setDeltaMovement(getDeltaMovement().add(impulse.scale(1 / mass)));
+                other.setDeltaMovement(other.getDeltaMovement().subtract(impulse.scale(1 / otherMass)));
+                Vec3 arm = best.point().subtract(position());
+                double inertia = Math.max(.5, mass * collisionRadius * collisionRadius);
+                if (closing > .08)
+                    body.angular = body.angular.add(arm.cross(impulse).scale(1 / inertia));
+                hasImpulse = true;
+                other.hasImpulse = true;
             }
         }
     }
@@ -305,7 +354,9 @@ public final class PhysicalBlockEntity extends Entity implements PhysicalistBody
         clientTarget = new Vec3(x, y, z);
         clientTargetYaw = yaw;
         clientTargetPitch = pitch;
-        clientLerpSteps = 1; // Position packets arrive every tick; rendering interpolates old/current pose.
+        // Keep a short interpolation buffer when a packet is delayed. One-step
+        // snapping made assemblies visibly twitch on otherwise smooth flight.
+        clientLerpSteps = position().distanceToSqr(clientTarget) > 256 ? 1 : 2;
     }
 
     @Override public boolean isPickable() { return true; }
@@ -325,21 +376,37 @@ public final class PhysicalBlockEntity extends Entity implements PhysicalistBody
 
     private final class BlockBody implements PhysicsBody {
         private Vec3 angular = Vec3.ZERO;
+        private Vec3 cachedPosition;
+        private float cachedYaw, cachedPitch, cachedRoll;
+        private double cachedScale;
+        private List<CompoundCollision.Box> cachedBoxes;
+
+        private void invalidateCollisionCache() { cachedBoxes = null; }
         @Override public Entity entity() { return PhysicalBlockEntity.this; }
         @Override public List<CompoundCollision.Box> collisionBoxes() {
+            Vec3 position = position();
+            float yaw = getYRot(), pitch = getXRot(), currentRoll = roll();
+            double scale = physicalistScale();
+            if (cachedBoxes != null && position.equals(cachedPosition)
+                    && yaw == cachedYaw && pitch == cachedPitch && currentRoll == cachedRoll
+                    && scale == cachedScale) return cachedBoxes;
             Quaternionf rotation = orientation();
             Vec3[] axes = {PhysicalBlockEntity.rotate(rotation, new Vec3(1, 0, 0)),
                     PhysicalBlockEntity.rotate(rotation, new Vec3(0, 1, 0)),
                     PhysicalBlockEntity.rotate(rotation, new Vec3(0, 0, 1))};
-            double scale = physicalistScale();
             List<CompoundCollision.Box> result = new ArrayList<>(localShape.size());
             for (AABB box : localShape) {
                 Vec3 offset = box.getCenter().subtract(localCenter).scale(scale);
-                result.add(new CompoundCollision.Box(position().add(PhysicalBlockEntity.rotate(rotation, offset)), axes,
+                result.add(new CompoundCollision.Box(position.add(PhysicalBlockEntity.rotate(rotation, offset)), axes,
                         new double[]{box.getXsize() * scale / 2, box.getYsize() * scale / 2,
                                 box.getZsize() * scale / 2}));
             }
-            return result;
+            cachedPosition = position;
+            cachedYaw = yaw;
+            cachedPitch = pitch;
+            cachedRoll = currentRoll;
+            cachedScale = scale;
+            return cachedBoxes = List.copyOf(result);
         }
         @Override public Vec3 forward() { return PhysicalBlockEntity.rotate(orientation(), new Vec3(0, 0, 1)); }
         @Override public Vec3 up() { return PhysicalBlockEntity.rotate(orientation(), new Vec3(0, 1, 0)); }
@@ -395,6 +462,7 @@ public final class PhysicalBlockEntity extends Entity implements PhysicalistBody
     private void readStructure(CompoundTag structure) {
         parts.clear();
         localShape.clear();
+        body.invalidateCollisionCache();
         if (structure.isEmpty()) return;
         HolderGetter<net.minecraft.world.level.block.Block> blocks = level().holderLookup(Registries.BLOCK);
         ListTag blockList = structure.getList("Blocks", Tag.TAG_COMPOUND);

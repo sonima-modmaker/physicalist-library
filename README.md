@@ -4,7 +4,7 @@
 
 Physicalist is a standalone physics mod and API for **Minecraft 1.21.1** on
 **NeoForge 21.1.219–21.1.251**. It provides compound collision, collision-driven
-aerodynamics, hinges, and a server-side rigid-body step for other mods. Version
+aerodynamics, hinges, and a server-side rigid-body step for other mods.
 The mod also includes creative-mode tools for trying the physics
 without writing an adapter first.
 
@@ -21,7 +21,7 @@ entity. A vehicle mod must pass its model geometry and motion through the API.
 | Diagnose loading and physics problems | [Troubleshooting](docs/TROUBLESHOOTING.md) |
 | Read the previous Russian documentation | [Russian documentation (older version)](docs/ru/INSTALL_RU.md) |
 
-The built mod is `build/libs/physicalist_library-0.5.1.jar`. The `-sources.jar`
+The built mod is `build/libs/physicalist_library-0.5.2.jar`. The `-sources.jar`
 file is for development and must not be installed as the playable mod.
 
 ## What's included
@@ -46,7 +46,12 @@ turning the camera. With the assembler, right click
 two opposite corners to turn the selected blocks into **one** physical entity;
 sneak-right-click clears the first corner. The assembled body retains each
 block's voxel collision, rotates from off-center impacts, and can be pushed by
-other entities. F3+B draws its collision parts as green outlines. Aim the
+other entities. Players can stand on its collision parts and push its sides;
+resting bodies settle instead of receiving a new impulse on every contact.
+Client interpolation smooths the movement of assembled bodies. External
+collision providers can receive normal and friction reaction impulses, so a
+physical body can push a moving Sable ship through an integration adapter.
+F3+B draws its collision parts as green outlines. Aim the
 deleter and right click to remove a physical entity. These are creative-mode
 tools. A selection is limited to 128 blocks, a 16-block span per axis, and
 512 voxel collision boxes. Blocks with block entities or fluid states are

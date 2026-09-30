@@ -112,13 +112,18 @@ public final class PhysicalistSimulation {
                 double closing = velocity.add(angular.cross(arm))
                         .subtract(bestObstacle.velocity()).dot(normal);
                 double inward = Math.max(0, -closing);
+                // A body pressed slowly into a moving world must still push
+                // back. Otherwise only the ship can move the body, while a
+                // wand-held or player-pushed body cannot move the ship.
+                double externalBias = bestObstacle.reaction() == null ? 0
+                        : Math.min(.035, Math.max(0, best.depth() - p.contactSlop()) * .12);
                 if (inward >= p.minimumImpactSpeed()) {
                     body.onImpact(bestPart, best, inward);
                     // Impact handlers may destroy blocks; refresh the cache before another substep.
                     cachedObstacles = null;
                 }
-                if (inward > 0) {
-                    double impulseSize = inward * (1 + p.restitution())
+                if (inward > 0 || externalBias > 1e-5) {
+                    double impulseSize = (inward * (1 + p.restitution()) + externalBias)
                             / (inverseMass + arm.cross(normal).lengthSqr() * inverseInertia);
                     Vec3 impulse = normal.scale(impulseSize);
                     velocity = velocity.add(impulse.scale(inverseMass));
@@ -134,6 +139,8 @@ public final class PhysicalistSimulation {
                         Vec3 friction = direction.scale(-frictionSize);
                         velocity = velocity.add(friction.scale(inverseMass));
                         angular = angular.add(arm.cross(friction).scale(inverseInertia));
+                        if (bestObstacle.reaction() != null)
+                            bestObstacle.reaction().accept(best.point(), friction);
                     }
                 }
             }
@@ -153,13 +160,7 @@ public final class PhysicalistSimulation {
     }
 
     private static AABB bounds(CompoundCollision.Box box) {
-        Vec3[] axes = box.axes();
-        double[] half = box.half();
-        double x = Math.abs(axes[0].x * half[0]) + Math.abs(axes[1].x * half[1]) + Math.abs(axes[2].x * half[2]);
-        double y = Math.abs(axes[0].y * half[0]) + Math.abs(axes[1].y * half[1]) + Math.abs(axes[2].y * half[2]);
-        double z = Math.abs(axes[0].z * half[0]) + Math.abs(axes[1].z * half[1]) + Math.abs(axes[2].z * half[2]);
-        Vec3 c = box.center();
-        return new AABB(c.x - x, c.y - y, c.z - z, c.x + x, c.y + y, c.z + z);
+        return CompoundCollision.bounds(box);
     }
 
     private static boolean clearCorridor(List<CompoundCollision.Box> parts, Vec3 origin, Vec3 travel, Vec3 angular,
