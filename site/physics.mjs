@@ -277,32 +277,128 @@ export class MouseJoint {
   }
 }
 
+
+// --- Destructible ground: a grid of one-metre cells under y = 0 ---
+
+export const CELL = Object.freeze({ EMPTY: 0, DIRT: 1, STONE: 2, BEDROCK: 3 });
+
+export class Terrain {
+  constructor(x0 = -80, x1 = 130, depth = 12) {
+    this.x0 = x0;
+    this.cols = x1 - x0;
+    this.depth = depth;
+    this.cells = new Uint8Array(this.cols * depth);
+    this.cache = new Map();
+    this.version = 0;
+    this.fill(x0, x1);
+  }
+  /** Puts the ground back between two x positions. */
+  fill(from, to) {
+    const i0 = Math.max(0, Math.floor(from) - this.x0), i1 = Math.min(this.cols, Math.ceil(to) - this.x0);
+    for (let i = i0; i < i1; i++) for (let j = 0; j < this.depth; j++) {
+      this.cells[i * this.depth + j] = j < 2 ? CELL.BEDROCK : j < this.depth - 5 ? CELL.STONE : CELL.DIRT;
+    }
+    this.version++;
+  }
+  /** Cell type at column i, row j (row depth-1 is the top layer, y in [-1, 0]). */
+  at(i, j) {
+    if (j < 0) return CELL.BEDROCK;
+    if (j >= this.depth || i < 0 || i >= this.cols) return CELL.EMPTY;
+    return this.cells[i * this.depth + j];
+  }
+  column(x) { return Math.floor(x) - this.x0; }
+  row(y) { return Math.floor(y) + this.depth; }
+  solidAt(x, y) { return this.at(this.column(x), this.row(y)) !== CELL.EMPTY; }
+  /** Height of the ground's top under x. */
+  surface(x) {
+    const i = this.column(x);
+    for (let j = this.depth - 1; j >= 0; j--) if (this.at(i, j)) return j - this.depth + 1;
+    return -this.depth;
+  }
+  exposed(i, j) { return !this.at(i - 1, j) || !this.at(i + 1, j) || !this.at(i, j + 1) || !this.at(i, j - 1); }
+  body(i, j) {
+    const key = i * this.depth + j;
+    let b = this.cache.get(key);
+    if (!b) {
+      b = new Body(this.x0 + i + 0.5, j - this.depth + 0.5, 0.5, 0.5, 0, { kind: 'cell', friction: MATERIALS.ground.friction, bounce: MATERIALS.ground.bounce });
+      b.cell = key;
+      this.cache.set(key, b);
+    }
+    return b;
+  }
+  /** Solid cells on the surface of the ground that a box around (x, y) of the given reach could touch. */
+  near(x, y, reach, out) {
+    out.length = 0;
+    if (y - reach > 0.05) return out;
+    const i0 = this.column(x - reach), i1 = this.column(x + reach);
+    const j0 = Math.max(0, this.row(y - reach)), j1 = Math.min(this.depth - 1, this.row(y + reach));
+    for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) {
+      if (this.at(i, j) && this.exposed(i, j)) out.push(this.body(i, j));
+    }
+    return out;
+  }
+  /** Blows a round hole; returns the removed cells (centre and type) for debris. */
+  carve(x, y, r, keep = () => false) {
+    const removed = [];
+    const i0 = this.column(x - r), i1 = this.column(x + r), j0 = Math.max(0, this.row(y - r)), j1 = Math.min(this.depth - 1, this.row(y + r));
+    for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) {
+      const type = this.at(i, j);
+      if (!type || type === CELL.BEDROCK) continue;
+      const cx = this.x0 + i + 0.5, cy = j - this.depth + 0.5;
+      // A ragged edge: cells near the rim go only sometimes.
+      const d = Math.hypot(cx - x, cy - y) / r;
+      if (d > 1 || (d > 0.75 && Math.random() < 0.5) || keep(cx, cy)) continue;
+      this.cells[i * this.depth + j] = CELL.EMPTY;
+      removed.push({ x: cx, y: cy, type, key: i * this.depth + j });
+    }
+    if (removed.length) this.version++;
+    return removed;
+  }
+}
+
+// --- Aircraft ---
+
+export function makePlane(team, x, y, dir = team === 'blue' ? 1 : -1) {
+  const b = new Body(x, y, 3.1, 0.55, 2200, { angle: dir > 0 ? 0 : Math.PI, friction: 0.5, bounce: 0.1, kind: 'plane' });
+  Object.assign(b, { team, dir, alive: true, hp: 100, cruise: 19 + Math.random() * 5, alt: y, cooldown: 2 + Math.random() * 4 });
+  b.vx = dir * b.cruise;
+  return b;
+}
+
 // --- The world ---
 
 export class World {
-  constructor(left = -40, right = 70) {
+  constructor(left = -70, right = 120) {
     this.bodies = [];
     this.arbiters = new Map();
     this.joint = null;
     this.events = [];
     this.iterations = 10;
-    this.ground = new Body(0, -50, 1e4, 50, 0, { friction: MATERIALS.ground.friction, bounce: MATERIALS.ground.bounce, kind: 'ground' });
+    this.terrain = new Terrain(left - 10, right + 10);
+    // Below the bedrock, in case anything ever gets through.
+    this.ground = new Body(0, -this.terrain.depth - 50, 1e4, 50, 0, { friction: 0.8, kind: 'ground' });
     this.walls = [new Body(0, 0, 1, 500, 0, { kind: 'wall', friction: 0.4 }), new Body(0, 0, 1, 500, 0, { kind: 'wall', friction: 0.4 })];
+    this.battle = { left: left + 35, right: right - 35 };
+    this.protect = [];
     this.setBounds(left, right);
-    this.home = { x: 10, y: 14 };
   }
   setBounds(left, right) {
     this.left = left; this.right = right;
     this.walls[0].x = left - 1;
     this.walls[1].x = right + 1;
   }
-  add(body) { this.bodies.push(body); return body; }
+  add(body) { body.removed = false; this.bodies.push(body); return body; }
   remove(body) {
+    body.removed = true;
     this.bodies = this.bodies.filter(b => b !== body);
     for (const [key, arb] of this.arbiters) if (arb.a === body || arb.b === body) this.arbiters.delete(key);
     if (this.joint?.body === body) this.joint = null;
   }
-  clear() { this.bodies = []; this.arbiters.clear(); this.joint = null; }
+  clear() {
+    for (const b of this.bodies) b.removed = true;
+    this.bodies = []; this.arbiters.clear(); this.joint = null;
+    this.terrain.fill(this.terrain.x0, this.terrain.x0 + this.terrain.cols);
+  }
   bodyAt(x, y, pad = 0.12) {
     for (let i = this.bodies.length - 1; i >= 0; i--) if (this.bodies[i].contains(x, y, pad)) return this.bodies[i];
     return null;
@@ -310,39 +406,70 @@ export class World {
   grab(body, x, y) { body.wake(); this.joint = new MouseJoint(body, x, y); return this.joint; }
   release() { this.joint = null; }
 
+  blast(body, radius = 5, power = 1) {
+    if (body.dead) return;
+    body.dead = true;
+    this.events.push({ type: 'explode', x: body.x, y: body.y, radius, power, body });
+  }
+
   onImpact(a, b, speed, contact) {
     for (const body of [a, b]) {
-      if (body.kind === 'rocket' && body.armed && speed > ARM_SPEED && !body.dead) {
-        body.dead = true;
-        this.events.push({ type: 'explode', x: body.x, y: body.y, radius: 5, power: 1, body });
-      }
+      if (body.kind === 'rocket' && body.armed && !(body.safe > 0) && speed > ARM_SPEED) this.blast(body);
       if (body.kind === 'block' && body.material === 'tnt' && body.fuse < 0 && speed > 14) body.fuse = 0.15;
+      // A wreck hitting anything, or a flying plane flown into something hard, goes up.
+      if (body.kind === 'plane' && (!body.alive ? speed > 3 : speed > 10)) this.blast(body, 6.5, 1.2);
     }
     if (speed > 3) this.events.push({ type: 'impact', x: contact.x, y: contact.y, speed, a, b });
   }
 
   explode(x, y, radius = 5, power = 1) {
     for (const b of this.bodies) {
-      if (b.invM === 0) continue;
-      const dx = b.x - x, dy = b.y - y, d = Math.hypot(dx, dy);
+      if (b.invM === 0 && !b.asleep) continue;
+      const dx = b.x - x, dy = b.y - y, d = Math.max(0, Math.hypot(dx, dy) - Math.min(b.hw, 2));
       if (d > radius) continue;
       const falloff = 1 - d / radius;
-      const j = power * 150 * falloff * Math.sqrt(b.mass);
-      const ux = d > 1e-3 ? dx / d : 0, uy = d > 1e-3 ? dy / d : 1;
+      const mass = b.asleep ? b.saved?.[0] ? 1 / b.saved[0] : b.mass : b.mass;
+      const j = power * 150 * falloff * Math.sqrt(mass) * (b.kind === 'plane' ? 0.35 : 1);
+      const dist = Math.hypot(dx, dy);
+      const ux = dist > 1e-3 ? dx / dist : 0, uy = dist > 1e-3 ? dy / dist : 1;
       // Hit slightly off-centre so things tumble.
       const ox = (Math.random() - 0.5) * b.hw, oy = (Math.random() - 0.5) * b.hh;
       b.impulse(ux * j, (uy + 0.35) * j, b.x + ox, b.y + oy);
       if (b.kind === 'block' && b.material === 'tnt' && b.fuse < 0) b.fuse = 0.18 + Math.random() * 0.25;
-      if (b.kind === 'rocket' && b.burn <= 0 && !b.armed && falloff > 0.5) this.ignite(b);
+      if (b.kind === 'rocket') {
+        if (b.armed && falloff > 0.35) this.blast(b);
+        else if (!b.armed && falloff > 0.5) this.ignite(b);
+      }
+      if (b.kind === 'plane' && b.alive) {
+        b.hp -= power * (150 * falloff + 20);
+        if (b.hp <= 0) { b.alive = false; this.events.push({ type: 'down', x: b.x, y: b.y, body: b }); }
+      }
+    }
+    // A blast near the ground digs a crater.
+    if (y - radius * 0.45 * power < 0.2) {
+      const removed = this.terrain.carve(x, y, radius * 0.45 * power, (cx, cy) => this.protect.some(p => Math.abs(cx - p.x) < p.r && cy > -2));
+      if (removed.length) {
+        const gone = new Set(removed.map(c => c.key));
+        for (const [key, arb] of this.arbiters) if (gone.has(arb.a.cell) || gone.has(arb.b.cell)) this.arbiters.delete(key);
+        for (const c of removed) this.terrain.cache.delete(c.key);
+        for (const b of this.bodies) if (Math.hypot(b.x - x, b.y - y) < radius * 1.6) b.wake();
+        this.events.push({ type: 'crater', x, y, cells: removed });
+      }
     }
   }
 
-  ignite(body, target = null) {
+  /** Lights a rocket's motor. target: nothing (straight), a point {x, y}, or a body to home on. */
+  ignite(body, target = null, { burn = BURN_TIME, thrust = THRUST, team = null } = {}) {
     if (body?.kind !== 'rocket' || body.dead) return false;
-    body.target = target;
+    body.targetBody = target instanceof Body ? target : null;
+    body.target = target instanceof Body ? null : target;
+    body.team = team;
     body.wake();
-    body.burn = BURN_TIME;
+    body.burn = burn;
+    body.thrust = thrust;
     body.armed = true;
+    // The fuse arms a moment after launch, clear of the rail and the ground beside it.
+    body.safe = 0.3;
     return true;
   }
 
@@ -365,13 +492,24 @@ export class World {
     b.t -= 0.3 * b.I * b.w;
     if (b.burn > 0) {
       const [tx, ty] = b.world(-b.hw, 0);
-      b.force(THRUST * m * c, THRUST * m * s, tx, ty);
+      const thrust = b.thrust ?? THRUST;
+      b.force(thrust * m * c, thrust * m * s, tx, ty);
     }
+    if (b.targetBody?.removed || (b.targetBody && b.targetBody.kind === 'rocket' && b.targetBody.dead)) b.targetBody = null;
     // Guided rockets keep steering after burnout while they still have speed for the fins to work with.
-    if (b.target && b.armed && speed > 4) {
-      // Loft over whatever is in the way while far, then dive onto the target.
-      const dx = b.target.x - b.x, dy = b.target.y - b.y;
-      const want = Math.atan2(dy + LOFT * Math.max(0, Math.abs(dx) - 8), dx);
+    if ((b.target || b.targetBody) && b.armed && speed > 4) {
+      let want;
+      if (b.targetBody) {
+        // Lead a moving target: aim where it will be when we get there.
+        const t = b.targetBody;
+        const dist = Math.hypot(t.x - b.x, t.y - b.y);
+        const tgo = Math.min(3, dist / Math.max(25, speed));
+        want = Math.atan2(t.y + t.vy * tgo - b.y, t.x + t.vx * tgo - b.x);
+      } else {
+        // Loft over whatever is in the way while far, then dive onto the point.
+        const dx = b.target.x - b.x, dy = b.target.y - b.y;
+        want = Math.atan2(dy + LOFT * Math.max(0, Math.abs(dx) - 8), dx);
+      }
       // Steer the flight path, not just the nose: point the nose past the wanted direction by as much as the velocity
       // still lags behind it.
       const course = Math.atan2(b.vy, b.vx);
@@ -385,21 +523,56 @@ export class World {
     }
   }
 
+  fly(b) {
+    const m = b.mass, speed = Math.hypot(b.vx, b.vy);
+    if (!b.alive) {
+      // A wreck: no lift worth the name, drag, and a slow roll toward the ground.
+      b.force(-0.02 * speed * b.vx * m, -0.02 * speed * b.vy * m + 2 * m);
+      b.t += b.I * 0.6 * Math.sign(Math.cos(b.a) || 1) * -1;
+      return;
+    }
+    if (b.x > this.battle.right && b.dir > 0) b.dir = -1;
+    if (b.x < this.battle.left && b.dir < 0) b.dir = 1;
+    const course = Math.atan2(b.vy, b.vx);
+    let vxWant, vyWant, limit = 14;
+    if (Math.cos(course) * b.dir < 0.2) {
+      // Turning back: a half loop at full speed (pull up and over), which leaves the plane upside down on the new
+      // heading, then it rolls level.
+      const turn = course + (b.dir < 0 ? 1 : -1) * 1.3;
+      const v = Math.max(speed, b.cruise);
+      vxWant = Math.cos(turn) * v; vyWant = Math.sin(turn) * v;
+      limit = 48;
+    } else {
+      vxWant = b.dir * b.cruise;
+      vyWant = Math.max(-6, Math.min(6, (b.alt - b.y) * 0.8)) + (b.evade ?? 0);
+    }
+    const ax = Math.max(-limit, Math.min(limit, (vxWant - b.vx) * 1.4));
+    const ay = Math.max(-limit, Math.min(limit, (vyWant - b.vy) * 1.6)) - GRAVITY;
+    b.force(m * ax, m * ay);
+    // The nose follows the flight path.
+    const error = Math.atan2(Math.sin(course - b.a), Math.cos(course - b.a));
+    b.t += b.I * (30 * error - 9 * b.w);
+  }
+
   step(dt) {
     if (dt <= 0) return;
     const invDt = 1 / dt;
     const bodies = this.bodies;
     const firstEvent = this.events.length;
-    const statics = [this.ground, ...this.walls];
+    const cells = [];
 
     // Pairs.
     const seen = new Set();
     const check = (a, b) => {
-      if (a.invM === 0 && b.invM === 0) return;
-      if (b.kind !== 'ground' && b.kind !== 'wall') {
+      if (a.invM === 0 && b.invM === 0 && !a.asleep) return;
+      if (b.kind === 'wall') {
+        if (Math.abs(a.x - b.x) > a.radius + 1.05) return;
+      } else if (b.kind === 'ground') {
+        if (a.y - a.radius > b.y + b.hh + 0.05) return;
+      } else {
         const r = a.radius + b.radius;
         if ((a.x - b.x) ** 2 + (a.y - b.y) ** 2 > r * r) return;
-      } else if (b.kind === 'ground' ? a.y - a.radius > 0.05 : Math.abs(a.x - b.x) > a.radius + 1.05) return;
+      }
       const key = a.id < b.id ? `${a.id}:${b.id}` : `${b.id}:${a.id}`;
       // Two sleeping bodies (or a sleeper on the ground) keep their contact as it was.
       if (a.asleep && (b.asleep || b.invM === 0) && this.arbiters.has(key)) { seen.add(key); return; }
@@ -411,8 +584,12 @@ export class World {
       arb.update(m);
     };
     for (let i = 0; i < bodies.length; i++) {
-      for (let j = i + 1; j < bodies.length; j++) check(bodies[i], bodies[j]);
-      for (const s of statics) check(bodies[i], s);
+      const a = bodies[i];
+      for (let j = i + 1; j < bodies.length; j++) check(a, bodies[j]);
+      for (const cell of this.terrain.near(a.x, a.y, a.radius + 0.1, cells)) check(a, cell);
+      check(a, this.ground);
+      check(a, this.walls[0]);
+      check(a, this.walls[1]);
     }
     for (const key of this.arbiters.keys()) if (!seen.has(key)) this.arbiters.delete(key);
 
@@ -445,6 +622,7 @@ export class World {
     for (const b of bodies) {
       if (b.asleep) { b.fx = b.fy = b.t = 0; continue; }
       if (b.kind === 'rocket') this.aerodynamics(b);
+      else if (b.kind === 'plane') this.fly(b);
       else b.t -= 0.02 * b.I * b.w;
       b.vx += dt * b.invM * b.fx;
       b.vy += dt * (GRAVITY + b.invM * b.fy);
@@ -465,38 +643,41 @@ export class World {
     }
 
     for (const b of sleepers) { [b.invM, b.invI] = b.saved; b.vx = b.vy = b.w = 0; }
+    const lost = [];
     for (const b of bodies) {
       if (!b.asleep) {
-        const still = b.vx * b.vx + b.vy * b.vy < 0.03 && Math.abs(b.w) < 0.25 && !(b.burn > 0) && !(b.fuse > 0) && this.joint?.body !== b;
+        const still = b.vx * b.vx + b.vy * b.vy < 0.03 && Math.abs(b.w) < 0.25 && !(b.burn > 0) && !(b.fuse > 0) && this.joint?.body !== b && b.kind !== 'plane';
         b.quiet = still ? b.quiet + dt : 0;
       }
       b.x += dt * b.vx;
       b.y += dt * b.vy;
       b.a += dt * b.w;
       if (b.kind === 'rocket' && b.burn > 0) b.burn = Math.max(0, b.burn - dt);
-      // Proximity fuse: a guided rocket bursts where it was sent, even in mid-air.
-      if (b.target && b.armed && !b.dead && Math.hypot(b.target.x - b.x, b.target.y - b.y) < 1.1) {
-        b.dead = true;
-        this.events.push({ type: 'explode', x: b.x, y: b.y, radius: 5, power: 1, body: b });
+      if (b.safe > 0) b.safe -= dt;
+      // Proximity fuses: a point-guided rocket bursts where it was sent, a homing one next to its target.
+      if (b.armed && !b.dead && !(b.safe > 0)) {
+        if (b.target && Math.hypot(b.target.x - b.x, b.target.y - b.y) < 1.1) this.blast(b);
+        else if (b.targetBody && Math.hypot(b.targetBody.x - b.x, b.targetBody.y - b.y) < (b.targetBody.kind === 'plane' ? 3 : 2.2)) this.blast(b);
       }
       if (b.kind === 'block' && b.fuse > 0) {
         b.fuse -= dt;
-        if (b.fuse <= 0 && !b.dead) { b.dead = true; this.events.push({ type: 'explode', x: b.x, y: b.y, radius: 6, power: 1.3, body: b }); }
+        if (b.fuse <= 0) this.blast(b, 6, 1.3);
       }
-      // Lost far above or out of the sides: bring it back down at the edge.
-      if (b.y < -5 || b.y > 400 || !Number.isFinite(b.x + b.y + b.a)) {
-        Object.assign(b, { x: this.home.x, y: this.home.y, vx: 0, vy: 0, w: 0, a: 0, burn: 0, armed: false });
-      }
+      if (b.kind === 'plane' && b.alive) b.cooldown -= dt;
+      // Out of the world: gone, not teleported somewhere.
+      if (b.y < -this.terrain.depth - 4 || b.y > 300 || b.x < this.left - 5 || b.x > this.right + 5 || !Number.isFinite(b.x + b.y + b.a)) lost.push(b);
     }
+    for (const b of lost) { this.remove(b); this.events.push({ type: 'lost', body: b }); }
 
-    // Explosions after the step, so the solver never sees a body vanish halfway.
-    for (const e of this.events.slice(firstEvent)) {
+    // Explosions after the step, so the solver never sees a body vanish halfway. A blast can set off more blasts.
+    for (let i = firstEvent; i < this.events.length; i++) {
+      const e = this.events[i];
       if (e.type !== 'explode') continue;
       this.remove(e.body);
       this.explode(e.x, e.y, e.radius, e.power);
     }
   }
 
-  /** Drains what happened since the last call (impacts and explosions) for sound and particles. */
+  /** Drains what happened since the last call (impacts, explosions, craters, planes going down) for the visuals. */
   drain() { const e = this.events; this.events = []; return e; }
 }

@@ -152,6 +152,10 @@ code { padding: 1px 6px; border-radius: 5px; background: rgba(255, 255, 255, 0.0
   backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
   pointer-events: none;
 }
+.stage-hint { transition: opacity 0.6s ease 2.5s; }
+.stage.used .stage-hint { opacity: 0; }
+.stage.is-panning { cursor: move; }
+.sandbox-note kbd { padding: 0 5px; border-radius: 4px; color: var(--ink-2); background: rgba(255, 255, 255, 0.07); border: 1px solid var(--line-soft); }
 .stage-hint kbd { padding: 1px 6px; border-radius: 5px; color: var(--ink); background: rgba(255, 255, 255, 0.1); border: 1px solid rgba(255, 255, 255, 0.15); }
 
 .stage-wrap { position: relative; }
@@ -190,7 +194,7 @@ code { padding: 1px 6px; border-radius: 5px; background: rgba(255, 255, 255, 0.0
 @media (max-width: 640px) {
   .hero { padding-top: 28px; }
   .stage { height: clamp(320px, 100vw, 460px); border-radius: 12px; }
-  .stage-hint { top: 10px; font-size: 12px; border-radius: 10px; white-space: nowrap; }
+  .stage-hint { top: auto; bottom: 10px; width: calc(100% - 20px); font-size: 12px; border-radius: 10px; }
   .stage-tools { position: static; margin-top: 10px; justify-content: stretch; }
   .tool { flex: 1 1 auto; min-height: 40px; padding: 0 8px; font-size: 12px; }
   .ammo { flex-direction: column; align-items: stretch; gap: 6px; }

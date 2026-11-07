@@ -46,11 +46,14 @@
         <div class="stage-wrap">
         <div class="stage" id="world-stage" tabindex="0" aria-describedby="sandbox-help">
           <canvas id="rocket-canvas" role="img" aria-label="Physics sandbox: a rocket launcher on the left, a block fort on the right. Click the sky to fire, drag anything to throw it."></canvas>
-          <p class="stage-hint" id="sandbox-help"><span class="hint-mouse"><kbd>Click</kbd> the sky to fire · <kbd>Drag</kbd> to throw · <kbd>Double-click</kbd> or <kbd>Space</kbd> ignites a rocket</span><span class="hint-touch">Tap the sky to fire · drag to throw · double-tap ignites</span></p>
+          <p class="stage-hint" id="sandbox-help"><span class="hint-mouse"><kbd>Click</kbd> the sky to fire, <kbd>hold</kbd> to steer · <kbd>Drag</kbd> to throw · <kbd>Right-drag</kbd> / <kbd>wheel</kbd> moves the camera</span><span class="hint-touch">Tap the sky to fire, hold to steer · drag to throw · two fingers move the camera</span></p>
         </div>
           <div class="stage-tools" role="toolbar" aria-label="Sandbox controls">
             <button type="button" id="fire-fort" class="tool tool-fire">Fire</button>
+            <button type="button" id="drop-dummy" class="tool">Drop dummy</button>
             <button type="button" id="rebuild-fort" class="tool">Rebuild fort</button>
+            <button type="button" id="air-battle" class="tool" aria-pressed="true">Air battle</button>
+            <button type="button" id="follow-camera" class="tool" aria-pressed="true">Follow cam</button>
             <button type="button" id="slow-motion" class="tool" aria-pressed="false">Slow-mo</button>
             <button type="button" id="reset-world" class="tool">Reset</button>
           </div>
@@ -70,7 +73,7 @@
             <button type="button" data-rocket="s8" aria-pressed="false"><img src="./sprites/s8.png" alt="" width="96" height="36"><span>S-8</span></button>
           </div>
         </div>
-        <p class="sandbox-note">A 2D toy made for this page: rigid boxes, friction, fin aerodynamics and blast impulses, simulated live in your browser. The mod itself runs a full 3D native solver inside Minecraft.</p>
+        <p class="sandbox-note">Keys: <kbd>Space</kbd> ignites the rocket you hold, <kbd>E</kbd> drops a dummy, <kbd>WASD</kbd>/arrows pan, <kbd>+</kbd>/<kbd>−</kbd> zoom, <kbd>C</kbd> follows again. Click the radar to jump there. A 2D toy made for this page — rigid boxes, friction, fin aerodynamics, homing missiles and blast craters, simulated live in your browser; the mod itself runs a full 3D native solver inside Minecraft.</p>
       </div>
     </section>
 

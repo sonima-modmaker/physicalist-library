@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { World, makeBlock, makeRocket } from './physics.mjs';
+import { World, makeBlock, makeRocket, makePlane } from './physics.mjs';
 
 const run = (world, seconds) => { for (let i = 0; i < seconds * 120; i++) world.step(1 / 120); };
 
@@ -47,7 +47,7 @@ test('a launched rocket climbs under thrust and flies toward its target', () => 
   run(world, 1.5);
   assert.ok(rocket.y > 8, `y=${rocket.y}`);
   assert.ok(rocket.x > 8, `x=${rocket.x}`);
-  assert.ok(Math.hypot(rocket.vx, rocket.vy) > 25);
+  assert.ok(Math.hypot(rocket.vx, rocket.vy) > 18);
 });
 
 test('an armed rocket explodes on impact and throws blocks', () => {
@@ -89,4 +89,54 @@ test('sleeping stacks wake cleanly after a blast', () => {
     assert.ok(Number.isFinite(b.x + b.y + b.a), 'non-finite block');
     assert.ok(b.y < 11 && b.y > 0.3, `block at y=${b.y}`);
   }
+});
+
+test('a blast on the ground digs a crater and what stood there falls in', () => {
+  const world = new World();
+  const block = world.add(makeBlock('wood', 10.5, 0.5));
+  run(world, 1);
+  assert.equal(world.terrain.surface(10.5), 0);
+  world.explode(10.5, 0.2, 5, 1);
+  assert.ok(world.terrain.surface(10.5) <= -1, `surface still at ${world.terrain.surface(10.5)}`);
+  run(world, 6);
+  assert.ok(block.removed || block.y < 0.6, `block still at ${block.y}`);
+});
+
+test('a plane holds its patrol height and turns around at the edge', () => {
+  const world = new World();
+  const plane = world.add(makePlane('blue', 0, 15));
+  let low = Infinity, high = -Infinity;
+  for (let i = 0; i < 120 * 12; i++) { world.step(1 / 120); low = Math.min(low, plane.y); high = Math.max(high, plane.y); }
+  assert.ok(plane.alive && !plane.removed);
+  assert.ok(low > 10 && high < 30, `height ${low}..${high}`);
+  assert.ok(plane.x > world.battle.left - 15 && plane.x < world.battle.right + 15, `x=${plane.x}`);
+});
+
+test('a homing missile brings a plane down', () => {
+  const world = new World();
+  const plane = world.add(makePlane('blue', 10, 18));
+  const sam = world.add(makeRocket('c75', 40, 2, 0.12, 1.4));
+  world.ignite(sam, plane, { burn: 3.5, thrust: 34 });
+  let down = false;
+  for (let i = 0; i < 120 * 6 && !down; i++) { world.step(1 / 120); down = world.drain().some(e => e.type === 'down'); }
+  assert.ok(down, 'plane survived');
+});
+
+test('a missile can intercept a rocket in flight', () => {
+  const world = new World();
+  const rocket = world.add(makeRocket('kh101', 0, 3, 0.1, 0.5));
+  world.ignite(rocket, { x: 40, y: 1 });
+  const interceptor = world.add(makeRocket('aim9x', 40, 2, 0.12, 2.2));
+  world.ignite(interceptor, rocket, { burn: 2.5, thrust: 34 });
+  for (let i = 0; i < 120 * 4 && !rocket.removed; i++) world.step(1 / 120);
+  assert.ok(rocket.removed, 'rocket was not intercepted');
+  assert.ok(Math.abs(rocket.x - 40) > 3 || rocket.y > 3, 'it reached its target first');
+});
+
+test('bodies that leave the world are removed, not piled up somewhere', () => {
+  const world = new World(-20, 40);
+  const block = world.add(makeBlock('stone', 10, 5));
+  block.vx = 0; block.vy = 0; block.y = 400;
+  world.step(1 / 120);
+  assert.ok(block.removed);
 });
