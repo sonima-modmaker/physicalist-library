@@ -1,3 +1,10 @@
 Physicalist Library includes physics calculations adapted from Create: The Air War,
 which is licensed GPL-3.0-only. See LICENSE and the source repository's LICENSE.
 No Create, Veil, Sable, missile model, texture, audio or explosion asset is bundled.
+
+Physicalist 0.7 includes an independently implemented Rust/JNI bridge using
+Rapier3D (rapier3d-f64 0.36.1, Apache-2.0) and the jni crate (0.21.1, MIT/Apache-2.0),
+plus their transitive dependencies. Original dependency license files and a
+version manifest are included in META-INF/licenses/native inside the JAR.
+Corresponding bridge source and Cargo.lock are in native/ in this repository.
+No MCS or QuistaPhys source or native library is redistributed.

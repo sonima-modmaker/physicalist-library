@@ -1,0 +1,15 @@
+newmtl white
+Kd 0.93 0.93 0.91
+newmtl red
+Kd 0.78 0.13 0.1
+newmtl yellow
+Kd 0.95 0.75 0.15
+newmtl grey
+Kd 0.5 0.52 0.55
+newmtl dark
+Kd 0.12 0.12 0.13
+newmtl wood
+Kd 0.45 0.3 0.17
+newmtl glass
+Kd 0.55 0.75 0.95
+d 0.45

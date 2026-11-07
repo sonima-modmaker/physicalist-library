@@ -17,6 +17,8 @@ public final class PhysicalistContent {
 
     public static final DeferredHolder<Item, Item> PHYSICS_WAND = ITEMS.register("physics_wand",
             () -> new PhysicsWandItem(new Item.Properties().stacksTo(1)));
+    public static final DeferredHolder<Item,Item> CHAIN_TOOL=ITEMS.register("chain_tool",()->new PhysicsChainItem(new Item.Properties().stacksTo(1)));
+    public static final DeferredHolder<EntityType<?>,EntityType<PhysicalChainEntity>> PHYSICAL_CHAIN=ENTITIES.register("physical_chain",()->EntityType.Builder.<PhysicalChainEntity>of(PhysicalChainEntity::new,MobCategory.MISC).sized(.2f,.2f).clientTrackingRange(64).updateInterval(1).build("physicalist_library:physical_chain"));
     public static final DeferredHolder<Item, Item> ASSEMBLER = ITEMS.register("assembler",
             () -> new PhysicalistAssemblerItem(new Item.Properties().stacksTo(1)));
     public static final DeferredHolder<Item, Item> DELETER = ITEMS.register("deleter",
@@ -26,13 +28,28 @@ public final class PhysicalistContent {
                     .<PhysicalBlockEntity>of(PhysicalBlockEntity::new, MobCategory.MISC)
                     .sized(1, 1).clientTrackingRange(64).updateInterval(1)
                     .build("physicalist_library:physical_block"));
+    public static final DeferredHolder<EntityType<?>, EntityType<PlayerRagdollEntity>> PLAYER_RAGDOLL =
+            ENTITIES.register("player_ragdoll", () -> EntityType.Builder
+                    .<PlayerRagdollEntity>of(PlayerRagdollEntity::new, MobCategory.MISC)
+                    .sized(.6F, 1.8F).clientTrackingRange(16).updateInterval(2)
+                    .build("physicalist_library:player_ragdoll"));
+    public static final DeferredHolder<Item, Item> PHYSICALIST = ITEMS.register("physicalist",
+            () -> new dev.physicalist.soft.PhysicalistToolItem(new Item.Properties().stacksTo(1)));
+    public static final DeferredHolder<EntityType<?>, EntityType<dev.physicalist.soft.SoftBodyEntity>> SOFT_BODY =
+            ENTITIES.register("soft_body", () -> EntityType.Builder
+                    .<dev.physicalist.soft.SoftBodyEntity>of(dev.physicalist.soft.SoftBodyEntity::new, MobCategory.MISC)
+                    .sized(1, 1).clientTrackingRange(16).updateInterval(1)
+                    .build("physicalist_library:soft_body"));
     public static final DeferredHolder<CreativeModeTab, CreativeModeTab> CREATIVE_TAB = TABS.register("physicalist",
             () -> CreativeModeTab.builder().title(Component.translatable("itemGroup.physicalist_library"))
                     .icon(() -> new ItemStack(PHYSICS_WAND.get()))
                     .displayItems((parameters, output) -> {
+                        // The soft-body tool only when the experimental soft bodies are switched on.
+                        if (PhysicalistConfig.softBodies()) output.accept(PHYSICALIST.get());
                         output.accept(PHYSICS_WAND.get());
                         output.accept(ASSEMBLER.get());
                         output.accept(DELETER.get());
+                        output.accept(CHAIN_TOOL.get());
                     }).build());
 
     private PhysicalistContent() {}

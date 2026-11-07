@@ -3,7 +3,7 @@
   "package": "dev.physicalist.mixin",
   "compatibilityLevel": "JAVA_21",
   "minVersion": "0.8",
-  "mixins": ["EntityWalkingCollisionMixin"],
+  "mixins": ["EntityWalkingCollisionMixin", "NativeTerrainDirtyMixin", "FastEntityCullingMixin"],
   "client": ["PhysicsWandMouseMixin"],
   "injectors": {"defaultRequire": 1}
 }

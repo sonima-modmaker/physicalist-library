@@ -215,3 +215,13 @@ adapters still own specialized entity-to-entity solvers. `onImpact` does not
 create explosions or sounds.
 See [configuration](CONFIG.md) and [troubleshooting](TROUBLESHOOTING.md)
 before tuning large numbers of fast-moving bodies.
+
+
+For the 0.6 elastic joint API, test ragdoll commands and profiling, see [Elastic physics](ELASTICITY.md).
+# Native scene integration in 0.7
+
+See [the 0.7 migration guide](PHYSICS_0_7.md) before choosing a solver.
+`NativeWorlds.enqueue(body)` defers a body into the shared per-level native step.
+`PhysicalistSimulation.step(body)` retains its synchronous Java behaviour.
+Never use both paths for the same body in the same tick.
+

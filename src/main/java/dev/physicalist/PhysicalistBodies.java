@@ -12,18 +12,22 @@ public final class PhysicalistBodies {
     private static final Map<UUID, Tracked> ACTIVE = new HashMap<>();
     private static long lastPrune = Long.MIN_VALUE;
 
+    public static void register(PhysicsBody body) { track(body); }
+
     static void track(PhysicsBody body) {
         Entity entity = body.entity();
         if (!(entity.level() instanceof ServerLevel level)) return;
         long tick = level.getServer().getTickCount();
         ACTIVE.put(entity.getUUID(), new Tracked(body, tick));
+        NoCullPacket.mark(entity);
         if (tick < lastPrune || tick - lastPrune >= 200 || lastPrune == Long.MIN_VALUE) {
             ACTIVE.entrySet().removeIf(entry -> entry.getValue().body().entity().isRemoved()
-                    || entry.getValue().body().entity().level() != level
                     || tick - entry.getValue().tick() > 3);
             lastPrune = tick;
         }
     }
+
+    static void clear(){ACTIVE.clear();lastPrune=Long.MIN_VALUE;}
 
     public static PhysicsBody find(Entity entity) {
         if (entity.isRemoved()) return null;

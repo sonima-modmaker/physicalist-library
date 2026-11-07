@@ -8,9 +8,18 @@ than SI quantities. Another mod may override the defaults with its own
 
 ## Motion
 
+## Native scene (0.7)
+
+`engine.nativeEnabled` defaults to `true`. It enables the shared Rapier scene
+when a matching native library is bundled. The Java backend remains available
+when disabled or unavailable. Use `/physicalist engine` to check the actual
+backend; see [the migration guide](PHYSICS_0_7.md) for units and integration.
+
+### Motion coefficients
+
 | Key | Default | Valid range | Effect |
 |---|---:|---:|---|
-| `motion.gravity` | `0.045` | `0…2` | Downward acceleration per tick |
+| `motion.gravity` | `0.024525` | `0…2` | Downward acceleration per tick (9.81 blocks/s² at 20 TPS) |
 | `motion.angularDamping` | `0.965` | `0…1` | Fraction of angular velocity retained each tick |
 | `motion.maximumSpeed` | `16` | `0.001…4096` | Generic solver's speed cap |
 
@@ -107,3 +116,6 @@ Start by checking for stuck bodies. Then lower
 that fast thin parts still collide. Do not set the step distance to an
 entire block for a thin wing. For an assembled block, the library captures
 at most 128 blocks and 512 voxel boxes to bound this cost.
+
+
+For the 0.6 elastic joint API, test ragdoll commands and profiling, see [Elastic physics](ELASTICITY.md).

@@ -26,9 +26,7 @@ public final class PhysicalBlockRenderer extends EntityRenderer<PhysicalBlockEnt
     @Override public void render(PhysicalBlockEntity entity, float yaw, float partialTick,
                                  PoseStack pose, MultiBufferSource buffers, int light) {
         pose.pushPose();
-        pose.mulPose(Axis.YP.rotationDegrees(-yaw));
-        pose.mulPose(Axis.XP.rotationDegrees(Mth.rotLerp(partialTick, entity.xRotO, entity.getXRot())));
-        pose.mulPose(Axis.ZP.rotationDegrees(entity.visualRoll(partialTick)));
+        pose.mulPose(entity.visualOrientation(partialTick));
         float scale = (float) entity.physicalistScale();
         pose.scale(scale, scale, scale);
         pose.translate(-entity.localCenter().x, -entity.localCenter().y, -entity.localCenter().z);

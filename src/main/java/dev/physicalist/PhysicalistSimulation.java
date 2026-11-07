@@ -16,6 +16,9 @@ public final class PhysicalistSimulation {
                             java.util.function.BiConsumer<Vec3, Vec3> reaction) {}
 
     public static void step(PhysicsBody body) {
+        long timer=PhysicsMetrics.begin();try{stepMeasured(body);}finally{PhysicsMetrics.end(timer);}
+    }
+    private static void stepMeasured(PhysicsBody body) {
         Entity entity = body.entity();
         if (!(entity.level() instanceof ServerLevel level) || entity.isRemoved()) return;
         PhysicalistBodies.track(body);
@@ -57,6 +60,7 @@ public final class PhysicalistSimulation {
             entity.hasImpulse = true;
             return;
         }
+        CollisionIndex<Obstacle> index=cachedObstacles==null||cachedObstacles.size()<64||initialBoxes.size()*steps<64?null:new CollisionIndex<>(cachedObstacles,Obstacle::bounds);
         for (int substep = 0; substep < steps && !entity.isRemoved(); substep++) {
             Vec3 before = entity.position();
             List<CompoundCollision.Box> oldBoxes = substep == 0 ? initialBoxes : List.copyOf(body.collisionBoxes());
@@ -86,7 +90,9 @@ public final class PhysicalistSimulation {
                 AABB sweptBounds = bounds(start).minmax(bounds(end))
                         .minmax(bounds(start).move(end.center().subtract(start.center())))
                         .inflate(rotationMargin + 1e-4);
-                for (Obstacle obstacle : nearby) {
+                var candidates=index!=null?index.query(sweptBounds):nearby;
+                PhysicsMetrics.query(candidates.size());
+                for (Obstacle obstacle : candidates) {
                     if (!sweptBounds.intersects(obstacle.bounds())) continue;
                     var world = obstacle.box();
                     var hit = CompoundCollision.contact(end, world);
@@ -99,6 +105,7 @@ public final class PhysicalistSimulation {
                 }
             }
             if (best != null) {
+                PhysicsMetrics.contact();
                 Vec3 normal = best.normal();
                 entity.setPos(entity.position().add(normal.scale(best.depth() + p.contactSlop())));
                 Vec3 arm = best.point().subtract(body.centerOfMass());
@@ -119,8 +126,10 @@ public final class PhysicalistSimulation {
                         : Math.min(.035, Math.max(0, best.depth() - p.contactSlop()) * .12);
                 if (inward >= p.minimumImpactSpeed()) {
                     body.onImpact(bestPart, best, inward);
+                    if(entity.isRemoved())return;
                     // Impact handlers may destroy blocks; refresh the cache before another substep.
                     cachedObstacles = null;
+                    index = null;
                 }
                 if (inward > 0 || externalBias > 1e-5) {
                     double impulseSize = (inward * (1 + p.restitution()) + externalBias)

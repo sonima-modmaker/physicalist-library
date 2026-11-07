@@ -1,0 +1,85 @@
+allocator-api2 0.2.21 | https://crates.io/crates/allocator-api2/0.2.21 | license files: LICENSE-APACHE, LICENSE-MIT
+approx 0.5.1 | https://crates.io/crates/approx/0.5.1 | license files: LICENSE
+arrayvec 0.7.8 | https://crates.io/crates/arrayvec/0.7.8 | license files: LICENSE-APACHE, LICENSE-MIT
+autocfg 1.5.1 | https://crates.io/crates/autocfg/1.5.1 | license files: LICENSE-APACHE, LICENSE-MIT
+bitflags 2.13.2 | https://crates.io/crates/bitflags/2.13.2 | license files: LICENSE-APACHE, LICENSE-MIT
+bytemuck 1.25.2 | https://crates.io/crates/bytemuck/1.25.2 | license files: LICENSE-APACHE, LICENSE-MIT, LICENSE-ZLIB
+byteorder 1.5.0 | https://crates.io/crates/byteorder/1.5.0 | license files: COPYING, LICENSE-MIT
+bytes 1.12.1 | https://crates.io/crates/bytes/1.12.1 | license files: LICENSE
+cesu8 1.1.0 | https://crates.io/crates/cesu8/1.1.0 | license files: 
+cfg-if 1.0.5 | https://crates.io/crates/cfg-if/1.0.5 | license files: LICENSE-APACHE, LICENSE-MIT
+combine 4.6.9 | https://crates.io/crates/combine/4.6.9 | license files: LICENSE
+downcast-rs 2.0.2 | https://crates.io/crates/downcast-rs/2.0.2 | license files: LICENSE-APACHE, LICENSE-MIT
+either 1.19.0 | https://crates.io/crates/either/1.19.0 | license files: LICENSE-APACHE, LICENSE-MIT
+ena 0.14.4 | https://crates.io/crates/ena/0.14.4 | license files: LICENSE-APACHE, LICENSE-MIT
+equivalent 1.0.3 | https://crates.io/crates/equivalent/1.0.3 | license files: LICENSE-APACHE, LICENSE-MIT
+foldhash 0.2.0 | https://crates.io/crates/foldhash/0.2.0 | license files: LICENSE
+glam 0.30.10 | https://crates.io/crates/glam/0.30.10 | license files: LICENSE-APACHE, LICENSE-MIT
+glam 0.31.1 | https://crates.io/crates/glam/0.31.1 | license files: LICENSE-APACHE, LICENSE-MIT
+glam 0.32.1 | https://crates.io/crates/glam/0.32.1 | license files: LICENSE-APACHE, LICENSE-MIT
+glam 0.33.12 | https://crates.io/crates/glam/0.33.12 | license files: LICENSE-APACHE, LICENSE-MIT
+glamx 0.3.1 | https://crates.io/crates/glamx/0.3.1 | license files: LICENSE-APACHE, LICENSE-MIT
+hash32 0.3.1 | https://crates.io/crates/hash32/0.3.1 | license files: LICENSE-APACHE, LICENSE-MIT
+hashbrown 0.16.1 | https://crates.io/crates/hashbrown/0.16.1 | license files: LICENSE-APACHE, LICENSE-MIT
+hashbrown 0.17.1 | https://crates.io/crates/hashbrown/0.17.1 | license files: LICENSE-APACHE, LICENSE-MIT
+heapless 0.8.0 | https://crates.io/crates/heapless/0.8.0 | license files: LICENSE-APACHE, LICENSE-MIT
+indexmap 2.14.2 | https://crates.io/crates/indexmap/2.14.2 | license files: LICENSE-APACHE, LICENSE-MIT
+jni 0.21.1 | https://crates.io/crates/jni/0.21.1 | license files: LICENSE-APACHE, LICENSE-MIT
+jni-sys 0.3.1 | https://crates.io/crates/jni-sys/0.3.1 | license files: LICENSE-APACHE, LICENSE-MIT
+jni-sys 0.4.1 | https://crates.io/crates/jni-sys/0.4.1 | license files: LICENSE-APACHE, LICENSE-MIT
+jni-sys-macros 0.4.1 | https://crates.io/crates/jni-sys-macros/0.4.1 | license files: 
+libm 0.2.16 | https://crates.io/crates/libm/0.2.16 | license files: LICENSE.txt
+log 0.4.34 | https://crates.io/crates/log/0.4.34 | license files: LICENSE-APACHE, LICENSE-MIT
+matrixmultiply 0.3.11 | https://crates.io/crates/matrixmultiply/0.3.11 | license files: LICENSE-APACHE, LICENSE-MIT
+memchr 2.8.3 | https://crates.io/crates/memchr/2.8.3 | license files: COPYING, LICENSE-MIT
+nalgebra 0.35.0 | https://crates.io/crates/nalgebra/0.35.0 | license files: LICENSE
+nalgebra-macros 0.3.0 | https://crates.io/crates/nalgebra-macros/0.3.0 | license files: LICENSE
+num-bigint 0.4.8 | https://crates.io/crates/num-bigint/0.4.8 | license files: LICENSE-APACHE, LICENSE-MIT
+num-complex 0.4.6 | https://crates.io/crates/num-complex/0.4.6 | license files: LICENSE-APACHE, LICENSE-MIT
+num-derive 0.5.1 | https://crates.io/crates/num-derive/0.5.1 | license files: LICENSE-APACHE, LICENSE-MIT
+num-integer 0.1.47 | https://crates.io/crates/num-integer/0.1.47 | license files: LICENSE-APACHE, LICENSE-MIT
+num-rational 0.4.2 | https://crates.io/crates/num-rational/0.4.2 | license files: LICENSE-APACHE, LICENSE-MIT
+num-traits 0.2.19 | https://crates.io/crates/num-traits/0.2.19 | license files: LICENSE-APACHE, LICENSE-MIT
+ordered-float 5.5.1 | https://crates.io/crates/ordered-float/5.5.1 | license files: LICENSE-MIT
+parry3d-f64 0.31.1 | https://crates.io/crates/parry3d-f64/0.31.1 | license files: 
+proc-macro2 1.0.107 | https://crates.io/crates/proc-macro2/1.0.107 | license files: LICENSE-APACHE, LICENSE-MIT
+profiling 1.0.18 | https://crates.io/crates/profiling/1.0.18 | license files: 
+profiling-procmacros 1.0.18 | https://crates.io/crates/profiling-procmacros/1.0.18 | license files: 
+quote 1.0.47 | https://crates.io/crates/quote/1.0.47 | license files: LICENSE-APACHE, LICENSE-MIT
+rapier3d-f64 0.36.1 | https://crates.io/crates/rapier3d-f64/0.36.1 | license files: 
+rawpointer 0.2.1 | https://crates.io/crates/rawpointer/0.2.1 | license files: LICENSE-APACHE, LICENSE-MIT
+robust 1.2.0 | https://crates.io/crates/robust/1.2.0 | license files: LICENSE-APACHE, LICENSE-MIT
+rstar 0.13.0 | https://crates.io/crates/rstar/0.13.0 | license files: 
+safe_arch 1.2.0 | https://crates.io/crates/safe_arch/1.2.0 | license files: LICENSE-APACHE.md, LICENSE-MIT.md, LICENSE-ZLIB.md
+same-file 1.0.6 | https://crates.io/crates/same-file/1.0.6 | license files: COPYING, LICENSE-MIT
+serde 1.0.229 | https://crates.io/crates/serde/1.0.229 | license files: LICENSE-APACHE, LICENSE-MIT
+serde_core 1.0.229 | https://crates.io/crates/serde_core/1.0.229 | license files: LICENSE-APACHE, LICENSE-MIT
+serde_derive 1.0.229 | https://crates.io/crates/serde_derive/1.0.229 | license files: LICENSE-APACHE, LICENSE-MIT
+simba 0.10.2 | https://crates.io/crates/simba/0.10.2 | license files: LICENSE
+slab 0.4.12 | https://crates.io/crates/slab/0.4.12 | license files: LICENSE
+smallvec 1.16.4 | https://crates.io/crates/smallvec/1.16.4 | license files: LICENSE-APACHE, LICENSE-MIT
+spade 2.15.1 | https://crates.io/crates/spade/2.15.1 | license files: LICENSE-APACHE, LICENSE-MIT
+stable_deref_trait 1.2.1 | https://crates.io/crates/stable_deref_trait/1.2.1 | license files: LICENSE-APACHE, LICENSE-MIT
+static_assertions 1.1.0 | https://crates.io/crates/static_assertions/1.1.0 | license files: LICENSE-APACHE, LICENSE-MIT
+syn 2.0.119 | https://crates.io/crates/syn/2.0.119 | license files: LICENSE-APACHE, LICENSE-MIT
+syn 3.0.9 | https://crates.io/crates/syn/3.0.9 | license files: LICENSE-APACHE, LICENSE-MIT
+thiserror 1.0.69 | https://crates.io/crates/thiserror/1.0.69 | license files: LICENSE-APACHE, LICENSE-MIT
+thiserror 2.0.21 | https://crates.io/crates/thiserror/2.0.21 | license files: LICENSE-APACHE, LICENSE-MIT
+thiserror-impl 1.0.69 | https://crates.io/crates/thiserror-impl/1.0.69 | license files: LICENSE-APACHE, LICENSE-MIT
+thiserror-impl 2.0.21 | https://crates.io/crates/thiserror-impl/2.0.21 | license files: LICENSE-APACHE, LICENSE-MIT
+typenum 1.20.1 | https://crates.io/crates/typenum/1.20.1 | license files: LICENSE, LICENSE-APACHE, LICENSE-MIT
+unicode-ident 1.0.27 | https://crates.io/crates/unicode-ident/1.0.27 | license files: LICENSE-APACHE, LICENSE-MIT, LICENSE-UNICODE
+walkdir 2.5.0 | https://crates.io/crates/walkdir/2.5.0 | license files: COPYING, LICENSE-MIT
+wide 1.7.1 | https://crates.io/crates/wide/1.7.1 | license files: LICENSE-APACHE.txt, LICENSE-MIT.txt, LICENSE-ZLIB.txt
+winapi-util 0.1.11 | https://crates.io/crates/winapi-util/0.1.11 | license files: COPYING, LICENSE-MIT
+windows-link 0.2.1 | https://crates.io/crates/windows-link/0.2.1 | license files: license-apache-2.0, license-mit
+windows-sys 0.45.0 | https://crates.io/crates/windows-sys/0.45.0 | license files: license-apache-2.0, license-mit
+windows-sys 0.61.2 | https://crates.io/crates/windows-sys/0.61.2 | license files: license-apache-2.0, license-mit
+windows-targets 0.42.2 | https://crates.io/crates/windows-targets/0.42.2 | license files: license-apache-2.0, license-mit
+windows_aarch64_gnullvm 0.42.2 | https://crates.io/crates/windows_aarch64_gnullvm/0.42.2 | license files: license-apache-2.0, license-mit
+windows_aarch64_msvc 0.42.2 | https://crates.io/crates/windows_aarch64_msvc/0.42.2 | license files: license-apache-2.0, license-mit
+windows_i686_gnu 0.42.2 | https://crates.io/crates/windows_i686_gnu/0.42.2 | license files: license-apache-2.0, license-mit
+windows_i686_msvc 0.42.2 | https://crates.io/crates/windows_i686_msvc/0.42.2 | license files: license-apache-2.0, license-mit
+windows_x86_64_gnu 0.42.2 | https://crates.io/crates/windows_x86_64_gnu/0.42.2 | license files: license-apache-2.0, license-mit
+windows_x86_64_gnullvm 0.42.2 | https://crates.io/crates/windows_x86_64_gnullvm/0.42.2 | license files: license-apache-2.0, license-mit
+windows_x86_64_msvc 0.42.2 | https://crates.io/crates/windows_x86_64_msvc/0.42.2 | license files: license-apache-2.0, license-mit

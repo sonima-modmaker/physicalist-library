@@ -1,0 +1,14 @@
+[package]
+name = "physicalist_cpu"
+version = "0.10.0"
+edition = "2021"
+license = "GPL-3.0-only"
+
+# Tiny dependency-free library built for the baseline CPU. It tells Java whether the
+# x86-64-v3 build of physicalist_native (AVX2/FMA/BMI) can run on this processor.
+[lib]
+crate-type = ["cdylib"]
+path = "lib.rs"
+
+[profile.release]
+panic = "abort"

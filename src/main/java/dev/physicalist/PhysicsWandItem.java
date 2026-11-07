@@ -46,12 +46,8 @@ public final class PhysicsWandItem extends Item {
             target.physicalistDrag(player, goal);
             return;
         }
-        Vec3 wanted = goal.subtract(entity.position()).scale(.22)
-                .subtract(entity.getDeltaMovement().scale(.58));
-        if (wanted.length() > 2) wanted = wanted.normalize().scale(2);
-        // Cancel the solver's gravity while held so the body can actually settle at the cursor.
-        entity.setDeltaMovement(entity.getDeltaMovement().add(wanted)
-                .add(0, body.profile().gravity(), 0));
+        entity.setDeltaMovement(GrabController.velocity(goal.subtract(entity.position()),
+                entity.getDeltaMovement(), body.profile().gravity()));
         Vec3 angular = body.angularVelocity().scale(.45);
         body.setAngularVelocity(angular.lengthSqr() < 1e-6 ? Vec3.ZERO : angular);
         entity.hasImpulse = true;

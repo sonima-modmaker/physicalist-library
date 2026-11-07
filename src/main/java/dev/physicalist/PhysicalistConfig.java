@@ -12,7 +12,7 @@ public final class PhysicalistConfig {
     private static ModConfigSpec.DoubleValue d(String key, double value, double max) {
         return B.defineInRange(key, value, 0, max);
     }
-    public static final ModConfigSpec.DoubleValue GRAVITY = d("motion.gravity", .045, 2);
+    public static final ModConfigSpec.DoubleValue GRAVITY = d("motion.gravity", .024525, 2);
     public static final ModConfigSpec.DoubleValue DRAG = d("aerodynamics.linearDrag", .002, 1);
     public static final ModConfigSpec.DoubleValue SPEED_DRAG = d("aerodynamics.speedDrag", .0006, 1);
     public static final ModConfigSpec.DoubleValue CROSS_DRAG = d("aerodynamics.crossflowDrag", .014, 1);
@@ -48,6 +48,20 @@ public final class PhysicalistConfig {
     public static final ModConfigSpec.DoubleValue HINGE_IMPULSE_GAIN = d("hinges.impactGain", 1.1, 100);
     public static final ModConfigSpec.DoubleValue HINGE_RETURN_RATE = d("hinges.returnRate", .006, 1);
     public static final ModConfigSpec.DoubleValue HINGE_LATCH_RATE = d("hinges.latchRate", .055, 1);
+    public static final ModConfigSpec.BooleanValue WATER_ENABLED = B.comment("Archimedes buoyancy and water drag for physical bodies (native engine).").define("water.enabled", true);
+    public static final ModConfigSpec.DoubleValue WATER_BUOYANCY = B.comment("Multiplier on buoyant force. 1 = physical; above 1 makes everything float higher.").defineInRange("water.buoyancyMultiplier", 1.0, 0, 20);
+    public static final ModConfigSpec.BooleanValue WATER_FLOAT_ALL = B.comment("Make every physical body float, whatever it is made of.").define("water.floatEverything", false);
+    public static final ModConfigSpec.DoubleValue WATER_FLOAT_ALL_DENSITY = B.comment("Density (relative to water) used for heavier bodies when floatEverything is on. Below 1 floats; 0.5 floats half-submerged.").defineInRange("water.floatEverythingDensity", .7, .05, .99);
+    public static final ModConfigSpec.DoubleValue WATER_RAGDOLL_DENSITY = B.comment("Ragdoll density relative to water. Below 1 floats (people ~0.95), above 1 sinks.").defineInRange("water.ragdollDensity", .85, .05, 20);
+    public static final ModConfigSpec.DoubleValue WATER_CHAIN_DENSITY = B.comment("Chain link density relative to water (iron ~7.8).").defineInRange("water.chainDensity", 7.8, .05, 20);
+    public static final ModConfigSpec.DoubleValue WATER_DEFAULT_DENSITY = B.comment("Density for bodies from other mods that do not specify one. Physical blocks use their material (wood floats, stone and metal sink).").defineInRange("water.defaultDensity", 1.5, .05, 20);
+    public static final ModConfigSpec.DoubleValue WATER_LINEAR_DRAG = B.comment("Water resistance to movement, per second, when fully submerged.").defineInRange("water.linearDrag", 1.5, 0, 20);
+    public static final ModConfigSpec.DoubleValue WATER_ANGULAR_DRAG = B.comment("Water resistance to rotation, per second, when fully submerged.").defineInRange("water.angularDrag", 2.0, 0, 20);
+    public static final ModConfigSpec.BooleanValue EXPERIMENTAL_SOFT_BODIES = B.comment("Experimental: soft bodies (the Physicalist tool's menu: deformable cars and planes from model files). Off by default.").define("experimental.softBodies", false);
+    public static boolean softBodies() {
+        try { return EXPERIMENTAL_SOFT_BODIES.get(); } catch (IllegalStateException notLoaded) { return false; }
+    }
+    public static final ModConfigSpec.BooleanValue NATIVE_ENABLED = B.comment("Use the shared native Rapier scene when a compatible native binary is bundled.").define("engine.nativeEnabled",true);
     public static final ModConfigSpec SPEC = B.build();
     private static volatile PhysicsProfile cached;
     private static volatile AutoAeroProfile cachedAutoAero;
@@ -84,3 +98,4 @@ public final class PhysicalistConfig {
     }
     private PhysicalistConfig() {}
 }
+

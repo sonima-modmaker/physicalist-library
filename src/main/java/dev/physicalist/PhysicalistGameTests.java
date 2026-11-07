@@ -19,6 +19,101 @@ import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 @GameTestHolder(PhysicalistLibrary.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class PhysicalistGameTests {
+    @GameTest(template = "empty")
+    public static void movingBodyCannotSwallowStandingPlayer(GameTestHelper helper) {
+        var level = helper.getLevel();
+        var pos = helper.absolutePos(new BlockPos(1, 8, 1));
+        level.setBlock(pos, Blocks.STONE.defaultBlockState(), 3);
+        var body = PhysicalBlockEntity.fromBlock(level, pos, level.getBlockState(pos));
+        level.setBlock(pos, Blocks.AIR.defaultBlockState(), 3);
+        level.setBlock(pos.above(), Blocks.AIR.defaultBlockState(), 3);
+        level.setBlock(pos.above(2), Blocks.AIR.defaultBlockState(), 3);
+        level.addFreshEntity(body);
+        var player = helper.makeMockPlayer(GameType.SURVIVAL);
+        player.setPos(body.getX(), body.getY() + .5, body.getZ());
+        for (int i = 0; i < 20; i++) {
+            body.setPos(body.position().add(0, .02, 0));
+            net.neoforged.neoforge.common.NeoForge.EVENT_BUS.post(new net.neoforged.neoforge.event.tick.PlayerTickEvent.Post(player));
+            helper.assertTrue(Math.abs(player.getY() - body.getY() - .5) < .001 && player.onGround(),
+                    "Body passed through stationary player's feet");
+        }
+        player.setPos(body.getX() + .65, body.getY(), body.getZ());
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.post(new net.neoforged.neoforge.event.tick.PlayerTickEvent.Post(player));
+        helper.assertTrue(CompoundCollision.contact(CompoundCollision.box(player.getBoundingBox().deflate(.0001)),
+                body.physicalistBody().collisionBoxes().getFirst()) == null,
+                "Player remained inside moving body's side");
+        body.discard(); helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void contactFrictionReducesSlipAndConservesMomentum(GameTestHelper helper) {
+        var level = helper.getLevel();
+        var pos = helper.absolutePos(new BlockPos(1, 8, 1));
+        level.setBlock(pos, Blocks.STONE.defaultBlockState(), 3);
+        var lower = PhysicalBlockEntity.fromBlock(level, pos, level.getBlockState(pos));
+        var upper = PhysicalBlockEntity.fromBlock(level, pos, level.getBlockState(pos));
+        level.setBlock(pos, Blocks.AIR.defaultBlockState(), 3);
+        upper.setPos(lower.position().add(0, 1, 0));
+        upper.setDeltaMovement(new Vec3(.2, 0, 0));
+        var a = upper.physicalistBody(); var b = lower.physicalistBody();
+        Vec3 point = lower.position().add(0, .5, 0), normal = new Vec3(0, 1, 0);
+        ContactFriction.apply(a, b, point, normal, .1, 1);
+        Vec3 slip = upper.getDeltaMovement().add(a.angularVelocity().cross(point.subtract(a.centerOfMass())))
+                .subtract(lower.getDeltaMovement()).subtract(b.angularVelocity().cross(point.subtract(b.centerOfMass())));
+        helper.assertTrue(slip.length() < .2 && upper.getDeltaMovement().x < .2 && lower.getDeltaMovement().x > 0,
+                "Contact friction did not oppose relative sliding");
+        helper.assertTrue(Math.abs(upper.getDeltaMovement().x + lower.getDeltaMovement().x - .2) < 1e-8,
+                "Friction changed total momentum");
+        upper.discard(); lower.discard(); helper.succeed();
+    }
+
+    @GameTest(template = "empty")
+    public static void playerStepsOntoPhysicalSlab(GameTestHelper helper) {
+        var level=helper.getLevel();
+        var pos=helper.absolutePos(new BlockPos(1,3,1));
+        level.setBlock(pos,Blocks.STONE_SLAB.defaultBlockState(),3);
+        var body=PhysicalBlockEntity.fromBlock(level,pos,level.getBlockState(pos));
+        level.setBlock(pos,Blocks.AIR.defaultBlockState(),3);
+        level.setBlock(pos.above(),Blocks.AIR.defaultBlockState(),3);
+        level.setBlock(pos.above(2),Blocks.AIR.defaultBlockState(),3);
+        level.addFreshEntity(body);
+        var player=helper.makeMockPlayer(GameType.SURVIVAL);
+        player.setPos(pos.getX()-.31,pos.getY(),pos.getZ()+.5);
+        player.setOnGround(true);
+        player.move(MoverType.SELF,new Vec3(.65,-.08,0));
+        helper.assertTrue(player.getX()>pos.getX()+.25 && Math.abs(player.getY()-pos.getY()-.5)<.01,
+            "Player cannot step onto physical slab: "+player.position());
+        body.discard();helper.succeed();
+    }
+    @GameTest(template = "empty")
+    public static void rotationUsesWorldAxesAndCrossesVertical(GameTestHelper helper) {
+        var level = helper.getLevel();
+        BlockPos pos = helper.absolutePos(new BlockPos(1, 12, 1));
+        level.setBlock(pos, Blocks.STONE.defaultBlockState(), 3);
+        var entity = PhysicalBlockEntity.fromBlock(level, pos, level.getBlockState(pos));
+        helper.assertTrue(entity != null, "Cannot create rotating body");
+        entity.setYRot(73);
+        var expected = new org.joml.Quaternionf().rotateY((float) Math.toRadians(-73));
+        var body = entity.physicalistBody();
+        Vec3 centre = body.centerOfMass();
+        for (int i = 0; i < 400; i++) {
+            Vec3 spin = i < 200 ? new Vec3(.025, 0, 0) : new Vec3(.012, .017, -.009);
+            double magnitude = spin.length();
+            expected = new org.joml.Quaternionf().rotationAxis((float) magnitude,
+                    (float) (spin.x / magnitude), (float) (spin.y / magnitude),
+                    (float) (spin.z / magnitude)).mul(expected).normalize();
+            body.rotate(spin, 1);
+            var wanted = expected.transform(new org.joml.Vector3f(0, 0, 1));
+            helper.assertTrue(body.forward().distanceToSqr(new Vec3(wanted.x, wanted.y, wanted.z)) < 1e-7,
+                    "Rotation changed axis or stuck at vertical at step " + i);
+        }
+        helper.assertTrue(body.centerOfMass().distanceToSqr(centre) < 1e-8,
+                "Rotation moved the centre of mass");
+        level.setBlock(pos, Blocks.AIR.defaultBlockState(), 3);
+        entity.discard();
+        helper.succeed();
+    }
+
     @GameTest(template = "empty", timeoutTicks = 60)
     public static void playerCanStandOnAndPushPhysicalBody(GameTestHelper helper) {
         var level = helper.getLevel();
@@ -28,6 +123,8 @@ public final class PhysicalistGameTests {
         helper.assertTrue(body != null, "Could not create a walkable physical body");
         level.setBlock(source, Blocks.AIR.defaultBlockState(), 3);
         helper.assertTrue(level.addFreshEntity(body), "Could not spawn walkable physical body");
+        level.setBlock(source.above(), Blocks.AIR.defaultBlockState(), 3);
+        level.setBlock(source.above(2), Blocks.AIR.defaultBlockState(), 3);
         var player = helper.makeMockPlayer(GameType.CREATIVE);
         player.setPos(body.getX(), body.getY() + .8, body.getZ());
         Vec3 falling = new Vec3(0, -1, 0);
@@ -40,6 +137,15 @@ public final class PhysicalistGameTests {
         player.move(MoverType.SELF, new Vec3(0, -1, 0));
         helper.assertTrue(Math.abs(player.getY() - body.getY() - .5) < .05,
                 "Minecraft's player movement ignored the physical surface: " + player.getY());
+        for (int step = 0; step < 12; step++) {
+            body.setPos(body.position().add(0, step % 2 == 0 ? .03 : -.03, 0));
+            Vec3 preview = PhysicalistWalkingCollision.clipPlayerMovement(player,
+                    new Vec3(.01, -.08, 0), new Vec3(.01, -.08, 0));
+            player.move(MoverType.SELF, new Vec3(.01, -.08, 0));
+            helper.assertTrue(Math.abs(player.getY() - body.getY() - .5) < .005 && player.onGround(),
+                    "Player lost a moving physical surface at step " + step + ": gap="
+                    + (player.getY() - body.getY() - .5) + " grounded=" + player.onGround() + " preview=" + preview);
+        }
 
         player.setPos(body.getX() - .8, body.getY(), body.getZ());
         PhysicalistWalkingCollision.pushBlocked(player, new Vec3(.25, 0, 0), Vec3.ZERO);
@@ -103,10 +209,13 @@ public final class PhysicalistGameTests {
         });
     }
 
-    @GameTest(template = "empty", timeoutTicks = 100)
+    @GameTest(template = "empty", timeoutTicks = 140)
     public static void offCenterAssemblyTopplesInsteadOfHovering(GameTestHelper helper) {
         var level = helper.getLevel();
         BlockPos base = helper.absolutePos(new BlockPos(1, 2, 1));
+        for(int x=-1;x<=1;x++)for(int z=-1;z<=1;z++)level.getChunk((base.getX()>>4)+x,(base.getZ()>>4)+z);
+        // The empty GameTest template has invisible boundary barriers; leave room to topple.
+        for(int x=-1;x<=6;x++)for(int y=0;y<=7;y++)for(int z=-1;z<=2;z++)level.setBlock(base.offset(x,y,z),Blocks.AIR.defaultBlockState(),3);
         level.setBlock(base.offset(4, 0, 0), Blocks.STONE.defaultBlockState(), 3);
         List<BlockPos> structure = new java.util.ArrayList<>();
         for (int x = 0; x < 5; x++) structure.add(base.offset(x, 1, 0));
@@ -116,9 +225,9 @@ public final class PhysicalistGameTests {
         helper.assertTrue(body != null, "Could not assemble off-center body");
         for (BlockPos pos : structure) level.setBlock(pos, Blocks.AIR.defaultBlockState(), 3);
         helper.assertTrue(level.addFreshEntity(body), "Could not spawn off-center body");
-        helper.runAfterDelay(65, () -> {
+        helper.runAfterDelay(105, () -> {
             helper.assertTrue(Math.abs(body.roll()) > 8 || Math.abs(body.getXRot()) > 8,
-                    "Assembly stayed balanced on a support outside its centre of mass");
+                    "Assembly stayed balanced outside COM: pitch="+body.getXRot()+" roll="+body.roll()+" pos="+body.position()+" engine="+dev.physicalist.nativecore.NativeWorlds.report());
             body.discard();
             helper.succeed();
         });

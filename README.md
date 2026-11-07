@@ -1,9 +1,25 @@
 # Physicalist
 
+**0.16.4: soft bodies (experimental).** Deformable cars and planes simulated by a native solver on its own thread:
+bodies crumple, doors swing on hinges, planes fly with a blade-element propeller, control surfaces and springy wings
+that always spring back (only a crash tears one off). Off by default — set `experimental.softBodies = true` in the
+config. Other mods can build and drive soft bodies through `dev.physicalist.soft.SoftApi` (road wheels with
+suspension and tyres, terrain, impulses, teleports with rotation). See the [soft-body guide](docs/SOFT_BODIES.md)
+and the [changelog](CHANGELOG.md).
+
+**0.9.0: physical chains, player tug-of-war and articulated ragdolls.**
+[Controls and API](docs/CHAINS.md).
+
+**0.7.0 — Major physics update.** Built-in assemblies and player ragdolls now
+use a shared Rapier3D native scene on Windows x86-64, with persistent compound
+colliders, joint/contact solving, CCD, sleeping and cached terrain. The Java
+backend remains available for compatibility. See the [new architecture and integration guide](docs/PHYSICS_0_7.md)
+or [подробное руководство на русском](docs/ru/PHYSICS_0_7_RU.md).
+
 **Website:** https://sonima-modmaker.github.io/physicalist-library/
 
 Physicalist is a standalone physics mod and API for **Minecraft 1.21.1** on
-**NeoForge 21.1.219–21.1.251**. It provides compound collision, collision-driven
+**NeoForge 21.1.219 and newer 21.1.x patches**. It provides compound collision, collision-driven
 aerodynamics, hinges, and a server-side rigid-body step for other mods.
 The mod also includes creative-mode tools for trying the physics
 without writing an adapter first.
@@ -15,13 +31,16 @@ entity. A vehicle mod must pass its model geometry and motion through the API.
 
 | Goal | Guide |
 |---|---|
+| Shared native scenes and companion-mod migration | [0.7 architecture](docs/PHYSICS_0_7.md), [JNI ABI](docs/NATIVE_ABI.md), [validation](docs/VALIDATION_0_7.md) |
 | Install the mod or build from source | [Installation](docs/INSTALL.md) |
 | Integrate vehicles or projectiles | [API and example adapter](docs/API.md) |
+| Soft bodies: deformable vehicles, planes, the `SoftApi` | [Soft-body guide](docs/SOFT_BODIES.md) |
 | Tune lift, drag, contact and hinges | [Configuration reference](docs/CONFIG.md) |
 | Diagnose loading and physics problems | [Troubleshooting](docs/TROUBLESHOOTING.md) |
+| Elastic joints, ragdolls and profiling | [Developer guide](docs/ELASTICITY.md) / [Русское руководство](docs/ru/ELASTICITY_RU.md) |
 | Read the previous Russian documentation | [Russian documentation (older version)](docs/ru/INSTALL_RU.md) |
 
-The built mod is `build/libs/physicalist_library-0.5.3.jar`. The `-sources.jar`
+The built mod is `build/libs/physicalist_library-<version>.jar`. The `-sources.jar`
 file is for development and must not be installed as the playable mod.
 
 ## What's included
@@ -111,11 +130,11 @@ Physicalist does not alter its vehicles. The projects are independent.
 
 ## Verification and license
 
-The project builds on both supported NeoForge endpoints. The standalone
+The build and server-test matrix covers NeoForge 21.1.219, 21.1.251 and 21.1.265. The standalone
 `verification/LibraryPhysicsTest.java` checks manual and geometric aero,
 asymmetric wings, mass, fall drag and thin-part collision.
 `verification/CollisionParityTest.java` compares 20,000 randomized oriented
-contacts and swept contacts against the previous solver. Seven server GameTests
+contacts and swept contacts against the previous solver. Twenty-one server GameTests
 check persistence, assembly, collision-part selection, settling and waking,
 the clear-path shortcut and a fast impact on thin bars.
 Runtime TPS should still be measured in a real world before a production modpack.
@@ -123,3 +142,12 @@ Runtime TPS should still be measured in a real world before a production modpack
 Source code is **GPL-3.0-only**. `LICENSE` and `NOTICE` are included in the
 project and built JAR. The project began from the
 [NeoForge MDK](https://github.com/NeoForgeMDKs/MDK-1.21.1-NeoGradle).
+
+
+## Elastic physics and test ragdolls (0.6)
+
+Physicalist now includes mass-aware rigid states, XPBD elastic distance joints and ball sockets, damping, break forces, swing limits, a spatial obstacle index and opt-in solver counters. Existing adapters remain source-compatible.
+
+Try `/physicalist ragdoll [online player]` to spawn a separate six-part skin dummy, then grab it with the physics wand. Use `/physicalist stats start` and `/physicalist stats` to inspect solver work.
+
+Read the detailed [elasticity and developer guide](docs/ELASTICITY.md) or the [Russian guide](docs/ru/ELASTICITY_RU.md) for units, integration examples, persistence, performance and limitations.

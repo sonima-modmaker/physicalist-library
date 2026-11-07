@@ -16,6 +16,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 /** Includes physical parts in vanilla movement and applies blocked player pushes. */
 @Mixin(Entity.class)
 public abstract class EntityWalkingCollisionMixin {
+    @Inject(method="push(Lnet/minecraft/world/entity/Entity;)V",at=@At("HEAD"),cancellable=true)
+    private void physicalist$noBoundingBoxShove(Entity other,org.spongepowered.asm.mixin.injection.callback.CallbackInfo ci){
+        Entity self=(Entity)(Object)this;
+        if(self instanceof Player&&dev.physicalist.PhysicalistBodies.find(other)!=null || other instanceof Player&&dev.physicalist.PhysicalistBodies.find(self)!=null)ci.cancel();
+    }
+
     @Inject(method = "collide", at = @At("RETURN"), cancellable = true)
     private void physicalist$pushBlockedBody(Vec3 wanted, CallbackInfoReturnable<Vec3> result) {
         Entity entity = (Entity) (Object) this;

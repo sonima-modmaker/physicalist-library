@@ -42,3 +42,16 @@ repo/
 # Local verification output
 *.log
 __pycache__/
+
+# Local native toolchain and Cargo build outputs
+.tools/
+native/target/
+
+# Local installs, backups and verification output
+deployment/
+deployment-backups/
+verification/bin/
+verification/results-*/
+run-*/
+# Prebuilt native libraries: built by CI / attached to releases, not kept in git
+src/main/resources/natives/

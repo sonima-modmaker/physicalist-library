@@ -1,0 +1,18 @@
+[package]
+name = "physicalist_native"
+version = "0.9.1"
+edition = "2021"
+license = "GPL-3.0-only"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+rapier = { package = "rapier3d-f64", version = "=0.36.1", features = ["enhanced-determinism", "parallel"] }
+jni = "=0.21.1"
+rayon = "=1.12.0"
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+panic = "unwind"

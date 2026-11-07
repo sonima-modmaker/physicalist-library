@@ -22,7 +22,7 @@ public final class PhysicalistWalkingCollision {
         List<VoxelShape> result = null;
         int columns = 0;
         for (Entity candidate : level.getEntities(mover, query,
-                entity -> entity.isAlive() && entity instanceof PhysicalistBodyProvider)) {
+                entity -> entity.isAlive() && !(entity instanceof PhysicalChainEntity) && entity instanceof PhysicalistBodyProvider)) {
             PhysicsBody body = ((PhysicalistBodyProvider) candidate).physicalistBody();
             if (body == null) continue;
             for (CompoundCollision.Box box : body.collisionBoxes()) {
@@ -42,12 +42,57 @@ public final class PhysicalistWalkingCollision {
         List<VoxelShape> shapes = add(List.of(), player, wanted,
                 bounds.expandTowards(wanted).inflate(.06), player.level());
         if (shapes.isEmpty()) return resolved;
+        // A moving/rotating body can raise its surface into the player's feet between
+        // ticks. Vanilla axis clipping deliberately ignores already overlapping boxes,
+        // so without recovering this shallow overlap the next step falls straight through.
+        double lift = 0;
+        if (wanted.y <= 0 && resolved.y <= 0) {
+            for (VoxelShape shape : shapes) {
+                if(shape.isEmpty())continue;
+                AABB surface = shape.bounds();
+                double height = surface.maxY - bounds.minY;
+                if (height <= 1e-7 || height > .125 || surface.minY >= bounds.minY
+                        || surface.maxX <= bounds.minX + .04 || surface.minX >= bounds.maxX - .04
+                        || surface.maxZ <= bounds.minZ + .04 || surface.minZ >= bounds.maxZ - .04) continue;
+                lift = Math.max(lift, height);
+            }
+            if (lift > 0) {
+                if (clearOfBlocks(player, bounds.move(0, lift, 0).deflate(1e-6)))
+                    bounds = bounds.move(0, lift, 0);
+                else lift = 0;
+            }
+        }
         double y = Shapes.collide(Direction.Axis.Y, bounds, shapes, resolved.y);
         bounds = bounds.move(0, y, 0);
         double x = Shapes.collide(Direction.Axis.X, bounds, shapes, resolved.x);
         bounds = bounds.move(x, 0, 0);
         double z = Shapes.collide(Direction.Axis.Z, bounds, shapes, resolved.z);
-        return new Vec3(x, y, z);
+        Vec3 clipped = new Vec3(x, y + lift, z);
+        double step = player.maxUpStep();
+        if (step > 0 && wanted.y <= 0 && (player.onGround() || y > resolved.y)
+                && clipped.horizontalDistanceSqr() + 1e-8 < resolved.horizontalDistanceSqr()) {
+            AABB original = player.getBoundingBox();
+            AABB route = original.expandTowards(resolved.x, step, resolved.z).inflate(.06);
+            List<VoxelShape> all = new ArrayList<>(add(List.of(), player, wanted, route, player.level()));
+            for (VoxelShape shape : player.level().getBlockCollisions(player, route)) all.add(shape);
+            double up = Shapes.collide(Direction.Axis.Y, original, all, step);
+            AABB raised = original.move(0, up, 0);
+            double sx = Shapes.collide(Direction.Axis.X, raised, all, resolved.x);
+            raised = raised.move(sx, 0, 0);
+            double sz = Shapes.collide(Direction.Axis.Z, raised, all, resolved.z);
+            raised = raised.move(0, 0, sz);
+            double down = Shapes.collide(Direction.Axis.Y, raised, all, -up + resolved.y);
+            if (sx * sx + sz * sz > clipped.horizontalDistanceSqr() + 1e-8)
+                return new Vec3(sx, up + down, sz);
+        }
+        return clipped;
+    }
+
+    private static boolean clearOfBlocks(Player player, AABB bounds) {
+        for (VoxelShape shape : player.level().getBlockCollisions(player, bounds)) {
+            if (Shapes.joinIsNotEmpty(shape, Shapes.create(bounds), net.minecraft.world.phys.shapes.BooleanOp.AND)) return false;
+        }
+        return true;
     }
 
     /** A player should push only the body that actually blocked horizontal movement. */
@@ -58,11 +103,13 @@ public final class PhysicalistWalkingCollision {
         AABB atContact = player.getBoundingBox().move(resolved).inflate(.055);
         AABB query = atContact.inflate(.15);
         for (Entity candidate : player.level().getEntities(player, query,
-                entity -> entity.isAlive() && entity instanceof PhysicalistBodyProvider)) {
+                entity -> entity.isAlive() && !(entity instanceof PhysicalChainEntity) && entity instanceof PhysicalistBodyProvider)) {
             PhysicsBody body = ((PhysicalistBodyProvider) candidate).physicalistBody();
             if (body == null) continue;
             for (CompoundCollision.Box box : body.collisionBoxes()) {
                 if (!intersects(box, query)) continue;
+                // Standing/stepping feet are support contacts, never side-push motors.
+                if (player.getBoundingBox().minY >= box.center().y + box.radius(new Vec3(0,1,0)) - .08) continue;
                 CompoundCollision.Contact contact = CompoundCollision.contact(box,
                         CompoundCollision.box(atContact));
                 if (contact == null || Math.abs(contact.normal().y) > .45) continue;
@@ -70,6 +117,7 @@ public final class PhysicalistWalkingCollision {
                 if (effort <= .008) continue;
                 double mass = Math.max(.5, body.aerodynamicMass());
                 double speed = Math.min(.12, effort * .65) / Math.sqrt(mass);
+                if(candidate instanceof PhysicalChainEntity chain){chain.pushAt(contact.point(),contact.normal().scale(speed));break;}
                 candidate.setDeltaMovement(candidate.getDeltaMovement()
                         .add(contact.normal().scale(speed)));
                 candidate.hasImpulse = true;
@@ -102,8 +150,8 @@ public final class PhysicalistWalkingCollision {
         double rx = box.radius(new Vec3(1, 0, 0));
         double rz = box.radius(new Vec3(0, 0, 1));
         double step = Math.clamp(Math.min(box.half()[0], box.half()[2]) * 1.5, .125, .25);
-        double minX = Math.max(center.x - rx, query.minX), maxX = Math.min(center.x + rx, query.maxX);
-        double minZ = Math.max(center.z - rz, query.minZ), maxZ = Math.min(center.z + rz, query.maxZ);
+        double minX = Math.max(center.x - rx, Math.floor(query.minX / step) * step), maxX = Math.min(center.x + rx, query.maxX);
+        double minZ = Math.max(center.z - rz, Math.floor(query.minZ / step) * step), maxZ = Math.min(center.z + rz, query.maxZ);
         Vec3[] axes = box.axes();
         double[] half = box.half();
         for (double x = minX; x < maxX; x += step) for (double z = minZ; z < maxZ; z += step) {
@@ -128,13 +176,57 @@ public final class PhysicalistWalkingCollision {
                     hi = Math.min(hi, Math.max(a, b));
                 }
             }
+            double ry = box.radius(new Vec3(0, 1, 0));
+            lo = Math.max(lo, -ry); hi = Math.min(hi, ry);
             if (hit && hi > lo && center.y + hi > query.minY && center.y + lo < query.maxY) {
-                shapes.add(Shapes.create(new AABB(x, Math.max(query.minY, center.y + lo), z,
-                        x1, Math.min(query.maxY, center.y + hi), z1)));
-                columns++;
+                if(x1-x<1e-6||z1-z<1e-6||hi-lo<1e-6)continue;
+                var shape=Shapes.create(new AABB(x, center.y + lo, z,x1, center.y + hi, z1));
+                if(!shape.isEmpty()){shapes.add(shape);columns++;}
             }
         }
         return columns;
+    }
+
+    /** Bodies move independently of Player.move, so recover overlaps after each player tick too. */
+    public static void recoverOverlap(Player player) {
+        if (player.isSpectator() || player.noPhysics) return;
+        for (int pass = 0; pass < 4; pass++) {
+            AABB bounds = player.getBoundingBox();
+            var shapes = add(List.of(), player, Vec3.ZERO, bounds.inflate(.06), player.level());
+            double lift = 0;
+            Vec3 sideways = Vec3.ZERO;
+            for (var shape : shapes) {
+                if(shape.isEmpty())continue;
+                AABB surface = shape.bounds();
+                if (!surface.intersects(bounds.deflate(1e-5))) continue;
+                double height = surface.maxY - bounds.minY;
+                if (height > 0 && height <= .6 && surface.minY < bounds.minY
+                        && surface.maxX > bounds.minX + .04 && surface.minX < bounds.maxX - .04
+                        && surface.maxZ > bounds.minZ + .04 && surface.minZ < bounds.maxZ - .04) {
+                    lift = Math.max(lift, height);
+                }
+            }
+            if (lift == 0) for (Entity candidate : player.level().getEntities(player, bounds.inflate(.06),
+                    entity -> entity.isAlive() && !(entity instanceof PhysicalChainEntity) && entity instanceof PhysicalistBodyProvider)) {
+                PhysicsBody body = ((PhysicalistBodyProvider) candidate).physicalistBody();
+                if (body == null) continue;
+                for (var box : body.collisionBoxes()) {
+                    var contact = CompoundCollision.contact(CompoundCollision.box(bounds), box);
+                    if (contact != null && Math.abs(contact.normal().y) < .5
+                            && contact.depth() > sideways.length())
+                        sideways = contact.normal().scale(Math.min(.5, contact.depth() + 1e-5));
+                }
+            }
+            Vec3 correction = lift > 0 ? new Vec3(0, lift, 0) : sideways;
+            if (correction.lengthSqr() < 1e-10 || !clearOfBlocks(player, bounds.move(correction).deflate(1e-5))) break;
+            player.setPos(player.position().add(correction));
+            if (lift > 0) {
+                player.setOnGround(true);
+                player.fallDistance = 0;
+                Vec3 velocity = player.getDeltaMovement();
+                if (velocity.y < 0) player.setDeltaMovement(velocity.x, 0, velocity.z);
+            }
+        }
     }
 
     private PhysicalistWalkingCollision() {}

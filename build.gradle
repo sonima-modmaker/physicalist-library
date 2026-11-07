@@ -71,6 +71,10 @@ runs {
     client {
         // Comma-separated list of namespaces to load gametests from. Empty = all namespaces.
         systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+        // -Pphysicalist_photo: a row of mob ragdolls in a fresh flat world, screenshots, then quit.
+        if (project.hasProperty('physicalist_photo')) systemProperty 'physicalist.photo', 'true'
+        // -Pphysicalist_softphoto: the sample soft bodies (door opened, a car dropped), screenshots, then quit.
+        if (project.hasProperty('physicalist_softphoto')) systemProperty 'physicalist.softphoto', 'true'
     }
 
     server {
@@ -83,6 +87,11 @@ runs {
     // The gametest system is also enabled by default for other run configs under the /test command.
     gameTestServer {
         systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+        // -Pphysicalist_bench runs BenchmarkGameTests; -Pphysicalist_jfr also records a flight-recorder profile.
+        if (project.hasProperty('physicalist_bench')) systemProperty 'physicalist.benchmark', 'true'
+        if (project.hasProperty('physicalist_parts')) systemProperty 'physicalist.benchmark.parts', project.property('physicalist_parts')
+        if (project.hasProperty('physicalist_baseline')) systemProperty 'physicalist.native.baseline', 'true'
+        if (project.hasProperty('physicalist_jfr')) jvmArgument '-XX:StartFlightRecording=filename=physicalist.jfr,settings=profile,dumponexit=true'
     }
 
     data {
@@ -175,9 +184,32 @@ tasks.withType(JavaCompile).configureEach {
 }
 
 // IDEA no longer automatically downloads sources/javadoc jars for dependencies, so we need to explicitly enable the behavior.
+tasks.named('sourcesJar', Jar).configure {
+    from('native') {
+        include 'Cargo.toml', 'Cargo.lock', 'README.md', 'src/**', 'cpuprobe/**'
+        into 'native'
+    }
+}
+
 idea {
     module {
         downloadSources = true
         downloadJavadoc = true
+    }
+}
+
+// NeoGradle's transform-library cache can retain absolute paths after a checkout moves.
+// Repair only this project's generated client-extra entry immediately before transformation.
+tasks.configureEach { task ->
+    if (task.name == 'neoFormTransformSource') task.doFirst {
+        def list = file('build/neoForm/neoFormJoined1.21.1-20240808.144430/steps/listTransformLibraries/libraries.txt')
+        if (list.exists()) {
+            list.setText(list.getText('UTF-8').readLines().collect { line ->
+                if (line.contains('Physicalist-Library') && line.contains('client-1.21.1-client-extra.jar')) {
+                    return '-e=' + file('.gradle/repositories/ng_dummy_ng/net/minecraft/client/1.21.1/client-1.21.1-client-extra.jar').absolutePath
+                }
+                line
+            }.join(System.lineSeparator()), 'UTF-8')
+        }
     }
 }

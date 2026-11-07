@@ -42,6 +42,10 @@ public final class PhysicalBlockEntity extends Entity implements PhysicalistBody
             PhysicalBlockEntity.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<CompoundTag> STRUCTURE = SynchedEntityData.defineId(
             PhysicalBlockEntity.class, EntityDataSerializers.COMPOUND_TAG);
+    private static final EntityDataAccessor<CompoundTag> NATIVE_POSE=SynchedEntityData.defineId(PhysicalBlockEntity.class,EntityDataSerializers.COMPOUND_TAG);
+    private final BodyPoseBuffer poses=new BodyPoseBuffer();
+    private Quaternionf exactOrientation,previousNativeOrientation;
+    private float exactYaw,exactPitch,exactRoll;
     private final List<BlockPart> parts = new ArrayList<>();
     private final List<AABB> localShape = new ArrayList<>();
     private final BlockBody body = new BlockBody();
@@ -60,6 +64,8 @@ public final class PhysicalBlockEntity extends Entity implements PhysicalistBody
 
     public PhysicalBlockEntity(EntityType<? extends PhysicalBlockEntity> type, Level level) {
         super(type, level);
+        // Culling mods freeze off-screen entities; see NoCullPacket.
+        noCulling = true;
     }
 
     /** Capture a block's exact voxel collision while it is still in the world. */
@@ -131,6 +137,7 @@ public final class PhysicalBlockEntity extends Entity implements PhysicalistBody
         builder.define(SCALE, 1f);
         builder.define(ROLL, 0f);
         builder.define(STRUCTURE, new CompoundTag());
+        builder.define(NATIVE_POSE,new CompoundTag());
     }
 
     @Override public void onSyncedDataUpdated(EntityDataAccessor<?> key) {
@@ -152,6 +159,13 @@ public final class PhysicalBlockEntity extends Entity implements PhysicalistBody
     }
 
     @Override public void tick() {
+        if(level().isClientSide&&!entityData.get(NATIVE_POSE).isEmpty()){
+            super.tick();var t=entityData.get(NATIVE_POSE);var q=new Quaternionf(t.getFloat("I"),t.getFloat("J"),t.getFloat("K"),t.getFloat("W"));
+            poses.add(t.getLong("T"),new Vec3(t.getDouble("X"),t.getDouble("Y"),t.getDouble("Z")),new Vec3(t.getDouble("VX"),t.getDouble("VY"),t.getDouble("VZ")),q,new Vec3(t.getDouble("AX"),t.getDouble("AY"),t.getDouble("AZ")));
+            if(!poses.empty()){var next=poses.at(level().getGameTime()-2);previousNativeOrientation=orientation();Vec3 previous=position();applyOrientation(next.rotation());setPos(next.position());xo=xOld=previous.x;yo=yOld=previous.y;zo=zOld=previous.z;}
+            return;
+        }
+
         if (level().isClientSide) {
             if (!clientRollReady) {
                 clientVisualRoll = roll();
@@ -169,6 +183,7 @@ public final class PhysicalBlockEntity extends Entity implements PhysicalistBody
                 setXRot(net.minecraft.util.Mth.rotLerp((float) fraction, getXRot(), clientTargetPitch));
             }
         } else if (!localShape.isEmpty()) {
+            if(dev.physicalist.nativecore.NativeWorlds.enqueue(body))return;
             boolean still = getDeltaMovement().lengthSqr() < 1e-5 && body.angular.lengthSqr() < 1e-5;
             if (sleeping && still && (tickCount % 8 != 0 || supported())
                     && (tickCount % 5 != 0 || !movingExternalContact())) {
@@ -263,27 +278,6 @@ public final class PhysicalBlockEntity extends Entity implements PhysicalistBody
         return footprint.supports(centerOfMass());
     }
 
-    private static final class SupportFootprint {
-        private double minX = Double.POSITIVE_INFINITY, maxX = Double.NEGATIVE_INFINITY;
-        private double minZ = Double.POSITIVE_INFINITY, maxZ = Double.NEGATIVE_INFINITY;
-
-        private void include(CompoundCollision.Box part, AABB obstacle) {
-            AABB bounds = CompoundCollision.bounds(part);
-            double x0 = Math.max(bounds.minX, obstacle.minX);
-            double x1 = Math.min(bounds.maxX, obstacle.maxX);
-            double z0 = Math.max(bounds.minZ, obstacle.minZ);
-            double z1 = Math.min(bounds.maxZ, obstacle.maxZ);
-            if (x1 <= x0 || z1 <= z0) return;
-            minX = Math.min(minX, x0); maxX = Math.max(maxX, x1);
-            minZ = Math.min(minZ, z0); maxZ = Math.max(maxZ, z1);
-        }
-
-        private boolean supports(Vec3 center) {
-            return center.x >= minX - .08 && center.x <= maxX + .08
-                    && center.z >= minZ - .08 && center.z <= maxZ + .08;
-        }
-    }
-
     private boolean movingExternalContact() {
         if (!(level() instanceof net.minecraft.server.level.ServerLevel level)
                 || !PhysicalistExternalCollisions.available()) return false;
@@ -338,6 +332,10 @@ public final class PhysicalBlockEntity extends Entity implements PhysicalistBody
             Vec3 relative = getDeltaMovement().subtract(other.getDeltaMovement());
             double closing = Math.max(0, -relative.dot(normal));
             double correction = Math.min(.08, Math.max(0, best.depth() - .012) * .35);
+            if (otherBody != null)
+                ContactFriction.apply(body, otherBody, best.point(), normal,
+                        closing / (1 / Math.max(.1, body.aerodynamicMass())
+                                + 1 / Math.max(.1, otherBody.aerodynamicMass())), 1);
             if (correction < .002 && closing < .025) continue;
             sleeping = false;
             quietTicks = 0;
@@ -377,6 +375,7 @@ public final class PhysicalBlockEntity extends Entity implements PhysicalistBody
             super.lerpTo(x, y, z, yaw, pitch, steps);
             return;
         }
+        if(!entityData.get(NATIVE_POSE).isEmpty())return;
         clientTarget = new Vec3(x, y, z);
         clientTargetYaw = yaw;
         clientTargetPitch = pitch;
@@ -390,10 +389,15 @@ public final class PhysicalBlockEntity extends Entity implements PhysicalistBody
     @Override public PhysicsBody physicalistBody() { return body; }
 
     private Quaternionf orientation() {
-        return Axis.YP.rotationDegrees(-getYRot())
-                .mul(Axis.XP.rotationDegrees(getXRot()))
-                .mul(Axis.ZP.rotationDegrees(roll()));
+        if(exactOrientation!=null&&(level().isClientSide&&!entityData.get(NATIVE_POSE).isEmpty()||getYRot()==exactYaw&&getXRot()==exactPitch&&roll()==exactRoll))return new Quaternionf(exactOrientation);
+        exactOrientation=Axis.YP.rotationDegrees(-getYRot()).mul(Axis.XP.rotationDegrees(getXRot())).mul(Axis.ZP.rotationDegrees(roll()));exactYaw=getYRot();exactPitch=getXRot();exactRoll=roll();return new Quaternionf(exactOrientation);
     }
+    private void applyOrientation(Quaternionf target){
+        var q=new Quaternionf(target).normalize();var a=BodyRotation.angles(q,new Vector3f((float)Math.toRadians(getXRot()),(float)Math.toRadians(-getYRot()),(float)Math.toRadians(roll())));
+        setXRot((float)Math.toDegrees(a.x));setYRot(-(float)Math.toDegrees(a.y));entityData.set(ROLL,(float)Math.toDegrees(a.z));exactOrientation=q;exactYaw=getYRot();exactPitch=getXRot();exactRoll=roll();
+    }
+    public Quaternionf visualOrientation(float partial){if(previousNativeOrientation!=null)return new Quaternionf(previousNativeOrientation).slerp(orientation(),partial).normalize();return Axis.YP.rotationDegrees(-net.minecraft.util.Mth.rotLerp(partial,yRotO,getYRot())).mul(Axis.XP.rotationDegrees(net.minecraft.util.Mth.rotLerp(partial,xRotO,getXRot()))).mul(Axis.ZP.rotationDegrees(visualRoll(partial)));}
+    private void publishNativePose(){var q=orientation();var p=position();var v=getDeltaMovement();var old=entityData.get(NATIVE_POSE);if(!old.isEmpty()&&p.distanceToSqr(new Vec3(old.getDouble("X"),old.getDouble("Y"),old.getDouble("Z")))<1e-14&&Math.abs(q.dot(new Quaternionf(old.getFloat("I"),old.getFloat("J"),old.getFloat("K"),old.getFloat("W"))))>1-1e-7&&v.lengthSqr()<1e-12)return;var t=new CompoundTag();t.putLong("T",level().getGameTime());t.putDouble("X",p.x);t.putDouble("Y",p.y);t.putDouble("Z",p.z);t.putDouble("VX",v.x);t.putDouble("VY",v.y);t.putDouble("VZ",v.z);t.putFloat("I",q.x);t.putFloat("J",q.y);t.putFloat("K",q.z);t.putFloat("W",q.w);t.putDouble("AX",body.angular.x);t.putDouble("AY",body.angular.y);t.putDouble("AZ",body.angular.z);entityData.set(NATIVE_POSE,t);}
 
     private static Vec3 rotate(Quaternionf q, Vec3 vector) {
         Vector3f transformed = q.transform(new Vector3f((float) vector.x, (float) vector.y, (float) vector.z));
@@ -413,7 +417,12 @@ public final class PhysicalBlockEntity extends Entity implements PhysicalistBody
         private double cachedScale;
         private List<CompoundCollision.Box> cachedBoxes;
 
-        private void invalidateCollisionCache() { cachedBoxes = null; }
+        private long shapeRevision;
+        @Override public Quaternionf nativeOrientation(){return orientation();}
+        @Override public void applyNativePose(Vec3 p,Quaternionf q){applyOrientation(q);setPos(p);}
+        @Override public void nativeStepCompleted(boolean asleep){sleeping=asleep;publishNativePose();}
+        @Override public long nativeGeometryRevision(){return shapeRevision*31+Double.doubleToLongBits(physicalistScale());}
+        private void invalidateCollisionCache() { cachedBoxes = null; shapeRevision++; }
         @Override public Entity entity() { return PhysicalBlockEntity.this; }
         @Override public Vec3 centerOfMass() { return PhysicalBlockEntity.this.centerOfMass(); }
         @Override public List<CompoundCollision.Box> collisionBoxes() {
@@ -448,11 +457,20 @@ public final class PhysicalBlockEntity extends Entity implements PhysicalistBody
         @Override public double aerodynamicMass() {
             return Math.max(.1, parts.size() * Math.pow(physicalistScale(), 3));
         }
+        @Override public double waterDensity() {
+            if (parts.isEmpty()) return PhysicalistWater.density(blockState());
+            double total = 0;
+            for (BlockPart part : parts) total += PhysicalistWater.density(part.state());
+            return total / parts.size();
+        }
         @Override public void rotate(Vec3 value, double fraction) {
+            double speed = value.length();
+            if (speed < 1e-10 || fraction == 0) return;
             Vec3 massCenter = centerOfMass();
-            setXRot(getXRot() + (float) Math.toDegrees(value.x * fraction));
-            setYRot(getYRot() - (float) Math.toDegrees(value.y * fraction));
-            entityData.set(ROLL, roll() + (float) Math.toDegrees(value.z * fraction));
+            Quaternionf next = new Quaternionf().rotationAxis((float) (speed * fraction),
+                    (float) (value.x / speed), (float) (value.y / speed), (float) (value.z / speed))
+                    .mul(orientation()).normalize();
+            applyOrientation(next);
             setPos(massCenter.subtract(massOffset()));
         }
     }
