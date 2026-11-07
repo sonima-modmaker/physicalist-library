@@ -3,69 +3,180 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#181c17">
-  <meta name="description" content="Physicalist is a Minecraft 1.21.1 physics mod and API. Pick up rockets in the playground, explore physical blocks, and download the NeoForge mod.">
-  <meta property="og:title" content="Physicalist — Minecraft physics">
-  <meta property="og:description" content="Pick up a rocket. Throw it. Watch it fly.">
+  <meta name="theme-color" content="#0b1026">
+  <meta name="description" content="Physicalist is a physics mod and Java API for Minecraft 1.21.1 on NeoForge: rigid block bodies, chains, ragdolls, water, smoke and experimental soft bodies.">
+  <meta property="og:title" content="Physicalist — real physics for Minecraft">
+  <meta property="og:description" content="Fire rockets, topple a fort, and see what the mod brings to Minecraft 1.21.1.">
   <meta property="og:type" content="website">
-  <title>Physicalist — Minecraft physics</title>
+  <title>Physicalist — real physics for Minecraft</title>
   <link rel="icon" type="image/svg+xml" href="./favicon.svg">
+  <link rel="preload" href="./fonts/Monocraft.ttf" as="font" type="font/ttf" crossorigin>
   <link rel="stylesheet" href="./styles.css">
   <script type="module" src="./playground.js"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
+
   <header class="site-header">
-    <a class="brand" href="#playground" aria-label="Physicalist home"><span class="brand-cube" aria-hidden="true">◆</span> PHYSICALIST</a>
-    <nav aria-label="Main navigation"><a href="#playground">Playground</a><a href="#about">About</a><a href="#install">Install</a></nav>
-    <a class="header-link" href="https://github.com/sonima-modmaker/physicalist-library">GITHUB ↗</a>
+    <a class="brand" href="#top" aria-label="Physicalist home">
+      <svg class="brand-mark" viewBox="0 0 8 8" aria-hidden="true"><path d="M3 0h2v1h1v1h1v1h1v2H7v1H6v1H5v1H3V7H2V6H1V5H0V3h1V2h1V1h1z" fill="#6fc04f"/><path d="M3 2h2v1h1v2H5v1H3V5H2V3h1z" fill="#ffe2a0"/></svg>
+      Physicalist
+    </a>
+    <nav aria-label="Main">
+      <a href="#features">Features</a>
+      <a href="#developers">Developers</a>
+      <a href="#install">Install</a>
+    </nav>
+    <a class="header-cta" href="https://github.com/sonima-modmaker/physicalist-library">GitHub</a>
   </header>
 
   <main id="main">
-    <section class="playground-section" id="playground" aria-labelledby="play-title">
-      <div class="world-frame">
-        <div class="world-bar"><span><span class="world-bar-dot" aria-hidden="true"></span> WORLD: PHYSICALIST</span><button id="reset-world" type="button">RESET FIELD ↺</button></div>
-        <div class="world-stage" id="world-stage">
-          <div class="stage-sun" aria-hidden="true"></div><div class="stage-cloud stage-cloud-a" aria-hidden="true"></div><div class="stage-cloud stage-cloud-b" aria-hidden="true"></div>
-          <div class="stage-hills" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
-          <canvas id="rocket-canvas" aria-label="Interactive rocket physics field. Choose a rocket below, then drag and release it to throw." role="img"></canvas>
-          <div class="stage-ground" aria-hidden="true"></div>
-          <p class="stage-tip">← DRAG &amp; THROW ROCKETS →</p>
+    <section class="hero" id="top" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="dot" aria-hidden="true"></span> Minecraft 1.21.1 · NeoForge · v0.16.4</p>
+        <h1 id="hero-title">Physicalist</h1>
+        <p class="lede">Real physics for Minecraft. Blocks with weight, chains, ragdolls, water, smoke — and vehicles that bend when they crash.</p>
+        <div class="actions">
+          <a class="btn btn-primary" href="https://github.com/sonima-modmaker/physicalist-library/releases/download/v0.16.4/physicalist_library-0.16.4.jar">Download 0.16.4</a>
+          <a class="btn" href="#features">What's inside</a>
         </div>
       </div>
-      <div class="world-transition" aria-hidden="true"></div>
-      <div class="playground-intro">
-        <p class="eyebrow">MINECRAFT 1.21.1 · NEOFORGE</p>
-        <h1 id="play-title">PHYSICALIST</h1>
+
+      <div class="sandbox">
+        <div class="stage-wrap">
+        <div class="stage" id="world-stage" tabindex="0" aria-describedby="sandbox-help">
+          <canvas id="rocket-canvas" role="img" aria-label="Physics sandbox: a rocket launcher on the left, a block fort on the right. Click the sky to fire, drag anything to throw it."></canvas>
+          <p class="stage-hint" id="sandbox-help"><span class="hint-mouse"><kbd>Click</kbd> the sky to fire · <kbd>Drag</kbd> to throw · <kbd>Double-click</kbd> or <kbd>Space</kbd> ignites a rocket</span><span class="hint-touch">Tap the sky to fire · drag to throw · double-tap ignites</span></p>
+        </div>
+          <div class="stage-tools" role="toolbar" aria-label="Sandbox controls">
+            <button type="button" id="fire-fort" class="tool tool-fire">Fire</button>
+            <button type="button" id="rebuild-fort" class="tool">Rebuild fort</button>
+            <button type="button" id="slow-motion" class="tool" aria-pressed="false">Slow-mo</button>
+            <button type="button" id="reset-world" class="tool">Reset</button>
+          </div>
+        </div>
+        <div class="ammo" role="group" aria-label="Choose the launcher's rocket">
+          <span class="ammo-label">Launcher</span>
+          <div class="ammo-list">
+            <button type="button" data-rocket="kh101" aria-pressed="true"><img src="./sprites/kh101.png" alt="" width="96" height="14"><span>Kh-101</span></button>
+            <button type="button" data-rocket="tomahawk" aria-pressed="false"><img src="./sprites/tomahawk.png" alt="" width="96" height="28"><span>Tomahawk</span></button>
+            <button type="button" data-rocket="c75" aria-pressed="false"><img src="./sprites/c75.png" alt="" width="96" height="23"><span>C-75</span></button>
+            <button type="button" data-rocket="c25" aria-pressed="false"><img src="./sprites/c25.png" alt="" width="96" height="33"><span>C-25</span></button>
+            <button type="button" data-rocket="aim9x" aria-pressed="false"><img src="./sprites/aim9x.png" alt="" width="96" height="23"><span>AIM-9X</span></button>
+            <button type="button" data-rocket="rim7" aria-pressed="false"><img src="./sprites/rim7.png" alt="" width="96" height="29"><span>RIM-7</span></button>
+            <button type="button" data-rocket="x25ml" aria-pressed="false"><img src="./sprites/x25ml.png" alt="" width="96" height="26"><span>Kh-25ML</span></button>
+            <button type="button" data-rocket="vihr" aria-pressed="false"><img src="./sprites/vihr.png" alt="" width="96" height="25"><span>Vikhr</span></button>
+            <button type="button" data-rocket="nine_k_119m" aria-pressed="false"><img src="./sprites/nine_k_119m.png" alt="" width="96" height="37"><span>9K119M</span></button>
+            <button type="button" data-rocket="s8" aria-pressed="false"><img src="./sprites/s8.png" alt="" width="96" height="36"><span>S-8</span></button>
+          </div>
+        </div>
+        <p class="sandbox-note">A 2D toy made for this page: rigid boxes, friction, fin aerodynamics and blast impulses, simulated live in your browser. The mod itself runs a full 3D native solver inside Minecraft.</p>
       </div>
-      <div class="playground-copy">
-        <p>Grab any rocket with the left mouse button. Drag and release to throw it. Its wings and weight shape the flight; if it leaves the field, it returns from the left.</p>
-        <div class="intro-actions"><a class="mc-button mc-button-green" href="https://github.com/sonima-modmaker/physicalist-library/releases/download/v0.5.3/physicalist_library-0.5.3.jar">DOWNLOAD MOD</a><a class="mc-button" href="#about">ABOUT THE MOD ↓</a></div>
+    </section>
+
+    <section class="features" id="features" aria-labelledby="features-title">
+      <div class="section-head">
+        <p class="eyebrow">What's inside</p>
+        <h2 id="features-title">One physics engine, many things it can move</h2>
+        <p>Physicalist is a standalone NeoForge mod and a Java API. Play with its tools in creative, or build its bodies into your own mod.</p>
       </div>
-      <div class="rocket-selector"><div class="selector-heading"><h3>CHOOSE A ROCKET</h3><p>Click one to add it to the field. Every sprite is rendered from a Create: The Air War model and texture.</p></div>
-        <div class="rocket-grid">
-          <button type="button" class="rocket-option" data-rocket="c75"><img src="./sprites/c75.png" alt="" loading="lazy"><span>C-75</span></button>
-          <button type="button" class="rocket-option" data-rocket="c25"><img src="./sprites/c25.png" alt="" loading="lazy"><span>C-25</span></button>
-          <button type="button" class="rocket-option" data-rocket="aim9x"><img src="./sprites/aim9x.png" alt="" loading="lazy"><span>AIM-9X</span></button>
-          <button type="button" class="rocket-option" data-rocket="rim7"><img src="./sprites/rim7.png" alt="" loading="lazy"><span>RIM-7</span></button>
-          <button type="button" class="rocket-option" data-rocket="nine_k_119m"><img src="./sprites/nine_k_119m.png" alt="" loading="lazy"><span>9K119M</span></button>
-          <button type="button" class="rocket-option" data-rocket="kh101"><img src="./sprites/kh101.png" alt="" loading="lazy"><span>Kh-101</span></button>
-          <button type="button" class="rocket-option" data-rocket="x25ml"><img src="./sprites/x25ml.png" alt="" loading="lazy"><span>Kh-25ML</span></button>
-          <button type="button" class="rocket-option" data-rocket="vihr"><img src="./sprites/vihr.png" alt="" loading="lazy"><span>Vikhr</span></button>
-          <button type="button" class="rocket-option" data-rocket="tomahawk"><img src="./sprites/tomahawk.png" alt="" loading="lazy"><span>Tomahawk</span></button>
-          <button type="button" class="rocket-option" data-rocket="s8"><img src="./sprites/s8.png" alt="" loading="lazy"><span>S-8</span></button>
+      <div class="feature-grid">
+        <article class="feature">
+          <svg viewBox="0 0 8 8" aria-hidden="true"><path d="M0 4h4v4H0z" fill="#b98a52"/><path d="M4 4h4v4H4z" fill="#8d8d8f"/><path d="M2 0h4v4H2z" fill="#d8402f"/><path d="M2 1h4v2H2z" fill="#efe9dc"/></svg>
+          <h3>Blocks with weight</h3>
+          <p>Assemble real blocks into one body with their exact voxel shapes. Push it, lift it, tip it over and watch it settle.</p>
+        </article>
+        <article class="feature">
+          <svg viewBox="0 0 8 8" aria-hidden="true"><path d="M1 0h2v1h1v2H3v1H1V3H0V1h1zM5 4h2v1h1v2H7v1H5V7H4V5h1z" fill="#c9ccd0"/><path d="M3 3h2v2H3z" fill="#7b8794"/></svg>
+          <h3>Chains and ragdolls</h3>
+          <p>Articulated chains in a shared native scene, and players that go limp and tumble as ragdolls.</p>
+        </article>
+        <article class="feature">
+          <svg viewBox="0 0 8 8" aria-hidden="true"><path d="M0 4h8v4H0z" fill="#3f76e4"/><path d="M0 4h2v1H0zM4 4h2v1H4z" fill="#7aa5f0"/><path d="M2 1h4v3H2z" fill="#b98a52"/></svg>
+          <h3>Water that floats things</h3>
+          <p>Water buoyancy for physical bodies: what you drop in a lake floats, bobs and drifts.</p>
+        </article>
+        <article class="feature">
+          <svg viewBox="0 0 8 8" aria-hidden="true"><path d="M2 0h3v1h1v2H5v1H2V3H1V1h1z" fill="#9b9ba3"/><path d="M3 4h2v2H3z" fill="#ffb648"/><path d="M2 6h4v2H2z" fill="#d8402f"/></svg>
+          <h3>Smoke, heat and clouds</h3>
+          <p>A native fluid solver: hot smoke rises, fills rooms, pours out of doors, and a big fire's plume climbs into clouds.</p>
+        </article>
+        <article class="feature">
+          <svg viewBox="0 0 8 8" aria-hidden="true"><path d="M0 3h8v2H0z" fill="#c9ccd0"/><path d="M3 1h2v6H3z" fill="#9aa1a8"/><path d="M6 2h1v4H6z" fill="#6fc04f"/></svg>
+          <h3>Soft bodies <span class="tag">Experimental</span></h3>
+          <p>Vehicles made of nodes and beams that dent and crumple, hinged doors that latch, and a flyable plane with flexing wings.</p>
+        </article>
+        <article class="feature">
+          <svg viewBox="0 0 8 8" aria-hidden="true"><path d="M1 1h6v6H1z" fill="#2b333d"/><path d="M2 3h1v1H2zM3 4h1v1H3zM2 5h1v1H2zM4 5h2v1H4z" fill="#6fc04f"/></svg>
+          <h3>Ready for other mods</h3>
+          <p>Compound collision, automatic wing lift from thin boxes, hinges and a soft-body API with road wheels.</p>
+        </article>
+      </div>
+      <p class="integration-note">Create: The Air War links its rockets and Sable ships to Physicalist.</p>
+    </section>
+
+    <section class="developers" id="developers" aria-labelledby="dev-title">
+      <div class="dev-copy">
+        <p class="eyebrow">For mod developers</p>
+        <h2 id="dev-title">Put a soft body in the world in a few calls</h2>
+        <p>Build a structure from any model (GLB, glTF, OBJ, FBX or Blockbench JSON), give it road wheels, and let Physicalist step it on its own thread. Read back node positions, wheel states and a rigid frame every tick.</p>
+        <ul class="doc-links">
+          <li><a href="https://github.com/sonima-modmaker/physicalist-library/blob/main/docs/API.md">Developer API</a></li>
+          <li><a href="https://github.com/sonima-modmaker/physicalist-library/blob/main/docs/SOFT_BODIES.md">Soft bodies</a></li>
+          <li><a href="https://github.com/sonima-modmaker/physicalist-library/blob/main/docs/CHAINS.md">Chains</a></li>
+          <li><a href="https://github.com/sonima-modmaker/physicalist-library/blob/main/docs/CONFIG.md">Configuration</a></li>
+        </ul>
+      </div>
+      <figure class="code-card">
+        <figcaption><span></span><span></span><span></span> SoftApi.java</figcaption>
+<pre><code><span class="k">if</span> (SoftApi.<span class="f">available</span>()) {
+    SoftStructure s = SoftStructure.<span class="f">build</span>(model, <span class="n">1</span>);
+    <span class="t">SoftApi.Body</span> body = SoftApi.<span class="f">create</span>(level, s,
+        nodes, wheels, friction, velocity, aeroScale);
+
+    <span class="c">// every server tick</span>
+    body.<span class="f">terrain</span>(level, tick);
+    body.<span class="f">wheels</span>(input);
+    SoftApi.<span class="f">advance</span>(level);
+    <span class="k">var</span> snap = body.<span class="f">latest</span>();
+}</code></pre>
+      </figure>
+    </section>
+
+    <section class="install" id="install" aria-labelledby="install-title">
+      <div class="section-head">
+        <p class="eyebrow">Get started</p>
+        <h2 id="install-title">Install in a minute</h2>
+      </div>
+      <ol class="steps">
+        <li><strong>Download</strong> <span>the 0.16.4 JAR from GitHub releases.</span></li>
+        <li><strong>Drop it in</strong> <span>your instance's <code>mods</code> folder — one copy only.</span></li>
+        <li><strong>Launch</strong> <span>Minecraft 1.21.1 with NeoForge and open the creative tab.</span></li>
+      </ol>
+      <div class="install-row">
+        <dl class="compat">
+          <div><dt>Minecraft</dt><dd>1.21.1</dd></div>
+          <div><dt>NeoForge</dt><dd>21.1.219 or newer 21.1.x</dd></div>
+          <div><dt>Java</dt><dd>21</dd></div>
+          <div><dt>Soft bodies</dt><dd>Off by default: <code>experimental.softBodies</code></dd></div>
+        </dl>
+        <div class="install-actions">
+          <a class="btn btn-primary" href="https://github.com/sonima-modmaker/physicalist-library/releases/download/v0.16.4/physicalist_library-0.16.4.jar">Download 0.16.4</a>
+          <a class="btn" href="https://github.com/sonima-modmaker/physicalist-library/blob/main/docs/INSTALL.md">Install guide</a>
+          <a class="btn btn-quiet" href="https://github.com/sonima-modmaker/physicalist-library/releases">All releases</a>
         </div>
       </div>
-      <p class="demo-note">This browser playground is a simplified 2D flight toy inspired by the mod. The Minecraft simulation uses the full in-game physics.</p>
     </section>
-
-    <section class="about-section" id="about" aria-labelledby="about-title"><div class="section-heading"><div><p class="eyebrow">MORE THAN A PLAYGROUND</p><h2 id="about-title">WHAT IS PHYSICALIST?</h2><p>A standalone NeoForge mod and API for physical things in Minecraft. Build with it directly, or use the engine inside another mod.</p></div></div>
-      <div class="block-cards"><article><div class="card-icon card-cube" aria-hidden="true">▧</div><h3>BLOCKS WITH WEIGHT</h3><p>Assemble real blocks into one body with their voxel shapes. Push it, pick it up, and watch it settle.</p></article><article><div class="card-icon card-wing" aria-hidden="true">➤</div><h3>SHAPES THAT FLY</h3><p>Thin model parts can act as wings. Motion and damage change the way a vehicle handles.</p></article><article><div class="card-icon card-link" aria-hidden="true">⌘</div><h3>READY FOR MODS</h3><p>Compound collision, hinges, and server-side motion are available through a Java API.</p></article></div>
-      <p class="integration-note">Create: The Air War connects its rockets and Sable ships to Physicalist. Immersive Vehicles Refurbished is a planned integration, not a current dependency.</p>
-    </section>
-
-    <section class="install-section" id="install" aria-labelledby="install-title"><div class="install-copy"><p class="eyebrow">READY TO BUILD?</p><h2 id="install-title">GET PHYSICALIST</h2><p>For Minecraft 1.21.1 with NeoForge 21.1.219–21.1.251. Download the playable JAR, put one copy in your instance's <code>mods</code> folder, then launch the game.</p><div class="install-actions"><a class="mc-button mc-button-green" href="https://github.com/sonima-modmaker/physicalist-library/releases/download/v0.5.3/physicalist_library-0.5.3.jar">DOWNLOAD v0.5.3</a><a class="mc-button" href="https://github.com/sonima-modmaker/physicalist-library/blob/main/docs/INSTALL.md">INSTALL GUIDE</a></div></div><div class="crafting-panel" aria-label="Creative tools included"><p>IN YOUR CREATIVE TAB</p><div><span aria-hidden="true">⚒</span><strong>Physics Wand</strong></div><div><span aria-hidden="true">▧</span><strong>Block Assembler</strong></div><div><span aria-hidden="true">✕</span><strong>Entity Deleter</strong></div><small>The visible name is Physicalist. The mod ID remains <code>physicalist_library</code> for compatibility.</small></div></section>
   </main>
-  <footer class="site-footer"><strong>PHYSICALIST</strong><span>Made for Minecraft. Open source under GPL-3.0-only.</span><div><a href="https://github.com/sonima-modmaker/physicalist-library">SOURCE ↗</a><a href="https://github.com/sonima-modmaker/physicalist-library/blob/main/docs/API.md">API ↗</a><a href="https://github.com/IdreesInc/Monocraft">MONOCRAFT FONT ↗</a></div></footer>
+
+  <footer class="site-footer">
+    <div><strong>Physicalist</strong> · open source under GPL-3.0-only. The mod ID stays <code>physicalist_library</code>.</div>
+    <div class="footer-links">
+      <a href="https://github.com/sonima-modmaker/physicalist-library">Source</a>
+      <a href="https://github.com/sonima-modmaker/physicalist-library/blob/main/CHANGELOG.md">Changelog</a>
+      <a href="https://github.com/IdreesInc/Monocraft">Monocraft font</a>
+    </div>
+    <p class="credits">Rocket sprites are rendered from Create: The Air War models. Not affiliated with Mojang or Microsoft.</p>
+  </footer>
 </body>
 </html>

@@ -1,37 +1,92 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { makeRocket, stepRocket } from './physics.mjs';
+import { World, makeBlock, makeRocket } from './physics.mjs';
 
-test('each model creates its own selectable body', () => {
-  const rocket = makeRocket('c75', 150, 100, { naturalWidth: 350, naturalHeight: 70 });
-  assert.equal(rocket.width, 177);
-  assert.equal(rocket.height, 35.4);
+const run = (world, seconds) => { for (let i = 0; i < seconds * 120; i++) world.step(1 / 120); };
+
+test('a dropped block comes to rest on the ground', () => {
+  const world = new World();
+  const block = world.add(makeBlock('wood', 5, 4));
+  run(world, 3);
+  assert.ok(Math.abs(block.y - 0.5) < 0.03, `y=${block.y}`);
+  assert.ok(Math.hypot(block.vx, block.vy) < 0.05);
 });
 
-test('a winged missile loses less height than a small unguided rocket', () => {
-  const image = { naturalWidth: 350, naturalHeight: 70 };
-  const winged = makeRocket('kh101', 100, 120, image);
-  const small = makeRocket('s8', 100, 120, image);
-  winged.vx = small.vx = 420;
-  for (let i = 0; i < 30; i++) {
-    stepRocket(winged, 1 / 60, { width: 2000, height: 1000 });
-    stepRocket(small, 1 / 60, { width: 2000, height: 1000 });
+test('a ten-block tower stands still', () => {
+  const world = new World();
+  const blocks = [];
+  for (let i = 0; i < 10; i++) blocks.push(world.add(makeBlock(i % 2 ? 'stone' : 'wood', 20, 0.5 + i * 1.001)));
+  run(world, 5);
+  const top = blocks.at(-1);
+  assert.ok(Math.abs(top.x - 20) < 0.05, `top drifted to x=${top.x}`);
+  assert.ok(top.y > 9.3, `top sank to y=${top.y}`);
+});
+
+test('a thrown rocket turns its nose into the wind', () => {
+  const world = new World();
+  const rocket = world.add(makeRocket('aim9x', 0, 20));
+  rocket.vx = 25; rocket.vy = 8; rocket.a = -0.8;
+  run(world, 1);
+  const course = Math.atan2(rocket.vy, rocket.vx);
+  assert.ok(Math.abs(course - rocket.a) < 0.2, `course=${course} nose=${rocket.a}`);
+});
+
+test('wide wings glide farther than a small unguided rocket', () => {
+  const world = new World(-500, 500);
+  const winged = world.add(makeRocket('kh101', 0, 40));
+  const small = world.add(makeRocket('s8', 0, 80));
+  winged.vx = small.vx = 30;
+  run(world, 1.5);
+  assert.ok(40 - winged.y < 80 - small.y, `winged fell ${40 - winged.y}, small fell ${80 - small.y}`);
+});
+
+test('a launched rocket climbs under thrust and flies toward its target', () => {
+  const world = new World(-500, 500);
+  const rocket = world.add(makeRocket('c75', 0, 1, 0.2, 0.9));
+  world.ignite(rocket, { x: 60, y: 30 });
+  run(world, 1.5);
+  assert.ok(rocket.y > 8, `y=${rocket.y}`);
+  assert.ok(rocket.x > 8, `x=${rocket.x}`);
+  assert.ok(Math.hypot(rocket.vx, rocket.vy) > 25);
+});
+
+test('an armed rocket explodes on impact and throws blocks', () => {
+  const world = new World();
+  const block = world.add(makeBlock('wood', 12, 0.5));
+  const rocket = world.add(makeRocket('vihr', 6, 0.6));
+  world.ignite(rocket);
+  let exploded = false;
+  for (let i = 0; i < 240 && !exploded; i++) {
+    world.step(1 / 120);
+    exploded = world.drain().some(e => e.type === 'explode');
   }
-  assert.ok(winged.y < small.y, `winged=${winged.y}, small=${small.y}`);
+  assert.ok(exploded);
+  assert.ok(!world.bodies.includes(rocket));
+  run(world, 0.1);
+  assert.ok(Math.hypot(block.vx, block.vy) > 2 || block.y > 1, 'block did not move');
 });
 
-test('leaving the field respawns a rocket on the left', () => {
-  const rocket = makeRocket('vihr', 900, 100);
-  rocket.vx = 300;
-  stepRocket(rocket, 1 / 60, { width: 500, height: 400 });
-  assert.ok(rocket.x < 0);
-  assert.ok(rocket.vx > 0);
+test('a grabbed block follows the pointer', () => {
+  const world = new World();
+  const block = world.add(makeBlock('stone', 5, 0.5));
+  run(world, 0.5);
+  const joint = world.grab(block, 5, 0.5);
+  joint.tx = 8; joint.ty = 4;
+  run(world, 1.5);
+  const [ax, ay] = joint.anchor();
+  assert.ok(Math.hypot(ax - 8, ay - 4) < 0.2, `anchor at ${ax}, ${ay}`);
 });
 
-test('dragged rockets stay exactly under the pointer', () => {
-  const rocket = makeRocket('aim9x', 90, 90);
-  rocket.held = true;
-  rocket.vx = 500;
-  stepRocket(rocket, 1 / 30, { width: 500, height: 400 });
-  assert.deepEqual([rocket.x, rocket.y], [90, 90]);
+test('sleeping stacks wake cleanly after a blast', () => {
+  const world = new World();
+  const blocks = [];
+  for (let y = 0; y < 4; y++) for (let x = 0; x < 3; x++) blocks.push(world.add(makeBlock('wood', 20 + x, 0.5 + y * 1.0005)));
+  for (const b of blocks) { b.asleep = true; b.quiet = 1; }
+  run(world, 1);
+  world.explode(19, 1, 5, 1);
+  run(world, 4);
+  for (const b of blocks) {
+    assert.ok(Number.isFinite(b.x + b.y + b.a), 'non-finite block');
+    assert.ok(b.y < 11 && b.y > 0.3, `block at y=${b.y}`);
+  }
 });
