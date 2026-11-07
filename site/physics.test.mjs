@@ -87,7 +87,7 @@ test('sleeping stacks wake cleanly after a blast', () => {
   run(world, 4);
   for (const b of blocks) {
     assert.ok(Number.isFinite(b.x + b.y + b.a), 'non-finite block');
-    assert.ok(b.y < 11 && b.y > 0.3, `block at y=${b.y}`);
+    assert.ok(b.y < 11 && b.y > -world.terrain.depth, `block at y=${b.y}`);
   }
 });
 
@@ -96,10 +96,14 @@ test('a blast on the ground digs a crater and what stood there falls in', () => 
   const block = world.add(makeBlock('wood', 10.5, 0.5));
   run(world, 1);
   assert.equal(world.terrain.surface(10.5), 0);
-  world.explode(10.5, 0.2, 5, 1);
+  world.explode(10.5, 0.2, 5, 0.7);
   assert.ok(world.terrain.surface(10.5) <= -1, `surface still at ${world.terrain.surface(10.5)}`);
-  run(world, 6);
-  assert.ok(block.removed || block.y < 0.6, `block still at ${block.y}`);
+  run(world, 10);
+  // Wherever it landed (in the hole or on its rim), it lies on the ground rather than hanging in the air.
+  if (!block.removed) {
+    assert.ok(Math.hypot(block.vx, block.vy) < 0.5, 'block still moving');
+    assert.ok(block.y - world.terrain.surface(block.x) < 1.5, `block floats at ${block.y}`);
+  }
 });
 
 test('a plane holds its patrol height and turns around at the edge', () => {

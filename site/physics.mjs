@@ -441,7 +441,7 @@ export class World {
         else if (!b.armed && falloff > 0.5) this.ignite(b);
       }
       if (b.kind === 'plane' && b.alive) {
-        b.hp -= power * (150 * falloff + 20);
+        b.hp -= power * (190 * falloff + 30);
         if (b.hp <= 0) { b.alive = false; this.events.push({ type: 'down', x: b.x, y: b.y, body: b }); }
       }
     }
@@ -657,7 +657,7 @@ export class World {
       // Proximity fuses: a point-guided rocket bursts where it was sent, a homing one next to its target.
       if (b.armed && !b.dead && !(b.safe > 0)) {
         if (b.target && Math.hypot(b.target.x - b.x, b.target.y - b.y) < 1.1) this.blast(b);
-        else if (b.targetBody && Math.hypot(b.targetBody.x - b.x, b.targetBody.y - b.y) < (b.targetBody.kind === 'plane' ? 3 : 2.2)) this.blast(b);
+        else if (b.targetBody && Math.hypot(b.targetBody.x - b.x, b.targetBody.y - b.y) < (b.targetBody.kind === 'plane' ? 4.5 : 2.4)) this.blast(b);
       }
       if (b.kind === 'block' && b.fuse > 0) {
         b.fuse -= dt;
