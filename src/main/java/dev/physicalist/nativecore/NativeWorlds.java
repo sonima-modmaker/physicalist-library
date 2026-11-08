@@ -17,7 +17,13 @@ public final class NativeWorlds {
   * A failed step only rebuilds that dimension's scene: bodies, ragdolls and chains enqueue themselves again next
   * tick. Native physics is switched off for the session only when the rebuilt scene keeps failing.
   */
- public static void flush(ServerLevel level){var scene=WORLDS.get(level);if(scene!=null)try{scene.flush();}catch(RuntimeException error){
+ /** Synchronous whole step (tests, benchmarks). The game itself uses {@link #launch} and {@link #settle}. */
+ public static void flush(ServerLevel level){run(level,NativeWorld::flush);}
+ /** End of a level tick: starts the step on the dimension's physics thread. Always on; there is no synchronous mode. */
+ public static void launch(ServerLevel level){run(level,NativeWorld::launch);}
+ /** Start of a level tick: waits for the step started last tick and applies it before entities tick. */
+ public static void settle(ServerLevel level){run(level,NativeWorld::settle);}
+ private static void run(ServerLevel level,java.util.function.Consumer<NativeWorld> action){var scene=WORLDS.get(level);if(scene!=null)try{action.accept(scene);}catch(RuntimeException error){
   long now=System.currentTimeMillis();failures=now-lastFailure<30_000?failures+1:1;lastFailure=now;var log=org.slf4j.LoggerFactory.getLogger("Physicalist");
   if(failures>=5){failure=error.toString();log.error("Native simulation keeps failing; resuming Java physics",error);closeAll();}else{log.error("Native step failed; rebuilding the scene of "+level.dimension().location(),error);close(level);}
  }}

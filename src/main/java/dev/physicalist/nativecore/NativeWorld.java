@@ -65,7 +65,8 @@ public final class NativeWorld implements AutoCloseable {
  }
  private final Map<UUID,PhysicalChainEntity> chains=new LinkedHashMap<>();private final Map<UUID,long[]> chainJoints=new HashMap<>();private final Map<UUID,long[]> chainEndJoints=new HashMap<>();private final Map<UUID,Long> chainLimits=new HashMap<>();
  void enqueue(PhysicalChainEntity chain){
-  long[] old=chainJoints.get(chain.getUUID());if(old!=null&&old[0]!=chain.revision()){
+  long[] old=chainJoints.get(chain.getUUID());if(old!=null&&old[0]!=chain.revision())settle();
+  old=chainJoints.get(chain.getUUID());if(old!=null&&old[0]!=chain.revision()){
    var it=bindings.entrySet().iterator();while(it.hasNext()){var b=it.next().getValue();if(b.source.owner()==chain){NativeBridge.removeBody0(scene,b.id);it.remove();}}chainJoints.remove(chain.getUUID());
   }
   for(int end=0;end<2;end++){Entity e=chain.endpoint(end).entity(level);if(e instanceof PlayerRagdollEntity doll&&chain.endpoint(end).doll()){enqueue(doll);continue;}var body=e==null?null:PhysicalistBodies.find(e);if(body!=null&&chain.endpoint(end).data.getBoolean("Rigid"))enqueue(body);}
@@ -99,9 +100,9 @@ public final class NativeWorld implements AutoCloseable {
  static long bits(Entity e){return e.getUUID().getLeastSignificantBits()|1;}
  /** Native body holding a jointed (rigid or ragdoll) chain end, or null for anchored ends. */
  private Binding endBinding(PhysicalChainEntity chain,int end){var p=chain.endpoint(end);if(!p.jointed())return null;Entity owner=p.entity(level);return owner==null?null:bindings.get(owner.getUUID()+(p.doll()?"/1":"/-1"));}
- private static final class Binding{long id,revision=Long.MIN_VALUE,lastSeen,created;double mass;double[] geometry,last;Source source;boolean paused,ignored;Vec3 before=Vec3.ZERO,beforeAngular=Vec3.ZERO,beforeCenter=Vec3.ZERO;Binding(Source source){this.source=source;}}
+ private static final class Binding{long id,revision=Long.MIN_VALUE,lastSeen,created;double mass;double[] geometry,last,sent;Source source;boolean paused,ignored;Vec3 before=Vec3.ZERO,beforeAngular=Vec3.ZERO,beforeCenter=Vec3.ZERO;Binding(Source source){this.source=source;}}
  private final ServerLevel level;public final long scene;private final TerrainCache terrain;private final ExternalLayer external;private final Map<String,Binding> bindings=new LinkedHashMap<>();private final Map<String,Source> pending=new LinkedHashMap<>();private final Map<UUID,long[]> rigs=new HashMap<>();private final Map<UUID,PlayerRagdollEntity> dolls=new LinkedHashMap<>();private long frame;private double lastMillis;private int sleeping;private int paused;
- NativeWorld(ServerLevel level){this.level=level;scene=NativeBridge.createScene0(9.81);terrain=new TerrainCache(level,scene);external=new ExternalLayer(scene);}
+ NativeWorld(ServerLevel level){this.level=level;worker=worker(level);scene=NativeBridge.createScene0(9.81);terrain=new TerrainCache(level,scene);external=new ExternalLayer(scene);}
  private static String key(Source s){return s.owner().getUUID()+"/"+s.role();}
  void enqueue(PhysicsBody body){var s=new BodySource(body);pending.put(key(s),s);PhysicalistBodies.register(body);}
  void enqueue(PlayerRagdollEntity doll){if(!dolls.containsKey(doll.getUUID()))doll.relaxInitialSelfContacts();for(int p=0;p<6;p++){var s=new LimbSource(doll,p);pending.put(key(s),s);}dolls.put(doll.getUUID(),doll);PhysicalistBodies.register(doll.physicalistBody());}
@@ -136,8 +137,25 @@ public final class NativeWorld implements AutoCloseable {
   for(int i=0;i<parts.size();i++){double h=PhysicalistWater.surface(level,parts.get(i));spec[3+i]=h;wet|=!Double.isNaN(h);}if(!wet)return;
   spec[0]=PhysicalistConfig.WATER_BUOYANCY.get()/PhysicalistWater.effective(density);spec[1]=PhysicalistConfig.WATER_LINEAR_DRAG.get();spec[2]=PhysicalistConfig.WATER_ANGULAR_DRAG.get();NativeBridge.water0(scene,id,spec);
  }
- public void flush(){long timer=PhysicsMetrics.begin();try{step();}finally{PhysicsMetrics.end(timer);}}
- private void step(){long started=System.nanoTime();frame++;paused=0;List<Binding> live=new ArrayList<>();
+ /**
+  * Rigid bodies always step on their own thread. At the end of a level tick the server gathers inputs and hands the
+  * Rapier step to the worker; at the start of the next level tick (or before anything else touches the scene) it
+  * picks the result up. The worker only runs the native step and never reads or writes Minecraft state.
+  */
+ private final java.util.concurrent.ExecutorService worker;private java.util.concurrent.Future<?> running;private List<Binding> stepping;private long started;private volatile double workerMillis;
+ private static java.util.concurrent.ExecutorService worker(ServerLevel level){return java.util.concurrent.Executors.newSingleThreadExecutor(r->{Thread t=new Thread(r,"Physicalist rigid bodies "+level.dimension().location());t.setDaemon(true);t.setPriority(Thread.NORM_PRIORITY);return t;});}
+ /** Synchronous step on the calling thread: finishes any step in flight, then runs a whole one. Used by tests and benchmarks. */
+ public void flush(){long timer=PhysicsMetrics.begin();try{settleStep();begin();if(stepping!=null){timedStep();}complete();}finally{PhysicsMetrics.end(timer);}}
+ /** End of a level tick: gather inputs and start the next step on the physics thread. */
+ public void launch(){long timer=PhysicsMetrics.begin();try{settleStep();begin();if(stepping!=null)running=worker.submit(this::timedStep);else complete();}finally{PhysicsMetrics.end(timer);}}
+ /** Waits for the step in flight (if any) and applies its result. Safe to call any time on the server thread. */
+ public void settle(){if(stepping==null)return;long timer=PhysicsMetrics.begin();try{settleStep();}finally{PhysicsMetrics.end(timer);}}
+ private void settleStep(){if(stepping==null)return;var future=running;running=null;
+  if(future!=null)try{future.get();}catch(InterruptedException e){Thread.currentThread().interrupt();stepping=null;throw new IllegalStateException("Interrupted while waiting for the physics thread",e);}catch(java.util.concurrent.ExecutionException e){stepping=null;throw e.getCause() instanceof RuntimeException r?r:new IllegalStateException(e.getCause());}
+  complete();}
+ private void timedStep(){long t=System.nanoTime();NativeBridge.step0(scene,.05);workerMillis=(System.nanoTime()-t)/1e6;}
+ /** Gathers every queued body into the scene. Leaves {@link #stepping} set when there is something to step. */
+ private void begin(){started=System.nanoTime();frame++;paused=0;List<Binding> live=new ArrayList<>();
   for(Source s:pending.values()){
    if(s.owner().isRemoved()||s.owner().level()!=level)continue;String key=key(s);Binding b=bindings.computeIfAbsent(key,k->new Binding(s));b.source=s;b.lastSeen=frame;
    long revision=s.revision();double mass=s.mass();if(b.id==0||revision<0||revision!=b.revision||mass!=b.mass){double[] geometry=s.geometry();if(b.id==0){double[] initial=repaired(state(s),b);b.id=NativeBridge.createBody0(scene,mass,s.gravity()/.024525,s.owner().getUUID().getLeastSignificantBits()|1,s.role(),initial,geometry);b.last=initial;b.created=frame;}else if(!same(geometry,b.geometry,1e-4)||mass!=b.mass)NativeBridge.geometry0(scene,b.id,mass,s.owner().getUUID().getLeastSignificantBits()|1,s.role(),geometry);b.geometry=geometry;b.revision=revision;b.mass=mass;}
@@ -150,9 +168,19 @@ public final class NativeWorld implements AutoCloseable {
   var it=bindings.entrySet().iterator();while(it.hasNext()){var e=it.next();Binding b=e.getValue();if(b.source.owner().isRemoved()||frame-b.lastSeen>100){NativeBridge.removeBody0(scene,b.id);it.remove();}else if(b.lastSeen==frame-1){double[] hold=repaired(state(b.source),b);hold[14]=8;NativeBridge.sync0(scene,new long[]{b.id},hold);}}
   Map<Entity,AABB> regions=new LinkedHashMap<>();for(var b:live)if(!b.paused)regions.merge(b.source.owner(),b.source.bounds().expandTowards(b.source.velocity()),AABB::minmax);external.update(level,regions);
   setupRigs();setupChains();long[] ids=new long[live.size()];double[] input=new double[live.size()*15];
-  for(int i=0;i<live.size();i++){Binding b=live.get(i);ids[i]=b.id;double[] s=repaired(alignedState(b.source,b),b);int flags=b.paused?8:4;if(b.source instanceof LimbSource&&b.created==frame)flags|=2;if(poseChanged(s,b.last))flags|=1;for(int a=7;a<13;a++)if(Math.abs(s[a]-b.last[a])>1e-7){flags|=2;break;}s[14]=flags;System.arraycopy(s,0,input,i*15,15);}
-  if(!live.isEmpty()){NativeBridge.sync0(scene,ids,input);NativeBridge.step0(scene,.05);double[] output=NativeBridge.read0(scene,ids);sleeping=0;
-   for(int i=0;i<live.size();i++){Binding b=live.get(i);b.last=Arrays.copyOfRange(output,i*15,(i+1)*15);var s=b.last;boolean rest=s[14]!=0;if(rest)sleeping++;b.source.accept(new Vec3(s[0],s[1],s[2]),new Quaternionf((float)s[3],(float)s[4],(float)s[5],(float)s[6]),new Vec3(s[7],s[8],s[9]).scale(.05),new Vec3(s[10],s[11],s[12]).scale(.05),rest);}
+  for(int i=0;i<live.size();i++){Binding b=live.get(i);ids[i]=b.id;double[] s=repaired(alignedState(b.source,b),b);int flags=b.paused?8:4;if(b.source instanceof LimbSource&&b.created==frame)flags|=2;if(poseChanged(s,b.last))flags|=1;for(int a=7;a<13;a++)if(Math.abs(s[a]-b.last[a])>1e-7){flags|=2;break;}s[14]=flags;System.arraycopy(s,0,input,i*15,15);b.sent=s;}
+  if(!live.isEmpty())NativeBridge.sync0(scene,ids,input);stepping=live;gatherNanos=System.nanoTime()-started;
+ }
+ private long gatherNanos;
+ /**
+  * A command, packet or other mod moved or pushed the entity while its step was on the physics thread. Its change
+  * wins: the step result is not written over it, and the next step picks it up as an external change.
+  */
+ private static boolean movedMeanwhile(Binding b){if(!(b.source instanceof BodySource)||b.sent==null)return false;double[] now=state(b.source);if(poseChanged(now,b.sent)){double dot=0;for(int i=3;i<7;i++)dot+=now[i]*b.sent[i];if(dot<0)for(int i=3;i<7;i++)now[i]=-now[i];if(poseChanged(now,b.sent))return true;}for(int a=7;a<13;a++)if(Math.abs(now[a]-b.sent[a])>1e-7)return true;return false;}
+ /** Reads the finished step back into the entities and runs the per-tick bookkeeping. */
+ private void complete(){List<Binding> live=stepping==null?List.of():stepping;stepping=null;long applyStarted=System.nanoTime();
+  if(!live.isEmpty()){long[] ids=new long[live.size()];for(int i=0;i<ids.length;i++)ids[i]=live.get(i).id;double[] output=NativeBridge.read0(scene,ids);sleeping=0;
+   for(int i=0;i<live.size();i++){Binding b=live.get(i);b.last=Arrays.copyOfRange(output,i*15,(i+1)*15);var s=b.last;boolean rest=s[14]!=0;if(rest)sleeping++;if(b.source.owner().isRemoved()||movedMeanwhile(b))continue;b.source.accept(new Vec3(s[0],s[1],s[2]),new Quaternionf((float)s[3],(float)s[4],(float)s[5],(float)s[6]),new Vec3(s[7],s[8],s[9]).scale(.05),new Vec3(s[10],s[11],s[12]).scale(.05),rest);}
    Map<Long,Binding> byId=new HashMap<>();for(var b:live)byId.put(b.id,b);
    for(var b:live){double[] contacts=NativeBridge.contacts0(scene,b.id);for(int at=0;at+9<contacts.length&&!b.source.owner().isRemoved();at+=10){Binding other=byId.get((long)contacts[at+1]);Vec3 point=new Vec3(contacts[at+5],contacts[at+6],contacts[at+7]);Vec3 relative=b.before.add(b.beforeAngular.cross(point.subtract(b.beforeCenter))).subtract(other==null?external.velocity((long)contacts[at+1]):other.before.add(other.beforeAngular.cross(point.subtract(other.beforeCenter)))),normal=new Vec3(contacts[at+2],contacts[at+3],contacts[at+4]);double speed=Math.max(0,-relative.dot(normal));external.reaction((long)contacts[at+1],new Vec3(contacts[at+5],contacts[at+6],contacts[at+7]),normal.scale(contacts[at+9]*.05));b.source.impact((int)contacts[at],new CompoundCollision.Contact(normal,new Vec3(contacts[at+5],contacts[at+6],contacts[at+7]),contacts[at+8]),speed,contacts[at+9]*.05);}}
   }
@@ -162,7 +190,7 @@ public final class NativeWorld implements AutoCloseable {
    chain.nativeStepFinished();Long limit=chainLimits.get(chain.getUUID());if(limit!=null)for(int end=0;end<2;end++)if(chain.endpoint(end).data.hasUUID("Ship")){double[] f=NativeBridge.jointForce0(scene,limit);chain.endpoint(end).applyForce(level,new Vec3(f[0],f[1],f[2]).scale(end==0?-1:1),chain.anchor(end));}var ends=chainEndJoints.get(chain.getUUID());if(ends!=null)for(int end=0;end<2;end++)if(ends[end]>=0&&chain.endpoint(end).data.hasUUID("Ship")){double[] f=NativeBridge.jointForce0(scene,ends[end]);chain.endpoint(end).applyForce(level,new Vec3(f[0],f[1],f[2]).scale(end==0?-1:1),chain.anchor(end));}
   }
   chains.entrySet().removeIf(e->e.getValue().isRemoved());chainJoints.keySet().retainAll(chains.keySet());chainEndJoints.keySet().retainAll(chains.keySet());chainLimits.keySet().retainAll(chains.keySet());
-  dolls.entrySet().removeIf(e->e.getValue().isRemoved());rigs.keySet().retainAll(dolls.keySet());terrain.prune(frame);lastMillis=(System.nanoTime()-started)/1e6;
+  dolls.entrySet().removeIf(e->e.getValue().isRemoved());rigs.keySet().retainAll(dolls.keySet());terrain.prune(frame);lastMillis=(gatherNanos+System.nanoTime()-applyStarted)/1e6;
  }
  private void setupRigs(){for(var e:dolls.entrySet()){long[] ids=new long[6];boolean ready=true;for(int i=0;i<6;i++){Binding b=bindings.get(e.getKey()+"/"+i);if(b==null){ready=false;break;}ids[i]=b.id;}if(!ready||Arrays.equals(ids,rigs.get(e.getKey())))continue;
   // s[7]: twist about the limb's own axis, s[9]: swing cone. Twist equal to the cone let legs spin 95 degrees.
@@ -171,6 +199,6 @@ public final class NativeWorld implements AutoCloseable {
  }}
  public boolean simulates(Entity entity){for(var b:bindings.values())if(b.source.owner()==entity&&b.id!=0&&!b.paused&&b.lastSeen==frame)return true;return false;}
  public String bodyReport(Entity entity){for(var b:bindings.values())if(b.source.owner()==entity)return "Rapier3D body="+b.id+" state="+(b.paused?"waiting for terrain":b.lastSeen!=frame?"awaiting entity tick":b.last[14]!=0?"sleeping":"simulating")+" forces="+(b.source instanceof BodySource body&&!body.body.nativeForcesEnabled()?"flight controller":"Physicalist")+" frame="+b.lastSeen+"/"+frame;for(var s:pending.values())if(s.owner()==entity)return "Queued for Rapier3D";return "Not registered in native scene";}
- public void invalidate(net.minecraft.core.BlockPos pos){terrain.invalidate(pos);}public String report(){return String.format(java.util.Locale.ROOT,"%s: %d bodies, %d sleeping, %d paused, %d terrain sections (%d bakes), %.3f ms/last tick",level.dimension().location(),bindings.size(),sleeping,paused,terrain.resident(),terrain.baked(),lastMillis);}
- @Override public void close(){NativeBridge.destroyScene0(scene);bindings.clear();pending.clear();rigs.clear();dolls.clear();chains.clear();chainJoints.clear();chainEndJoints.clear();chainLimits.clear();}
+ public void invalidate(net.minecraft.core.BlockPos pos){terrain.invalidate(pos);}public String report(){return String.format(java.util.Locale.ROOT,"%s: %d bodies, %d sleeping, %d paused, %d terrain sections (%d bakes), %.3f ms on the server thread, %.3f ms on the physics thread",level.dimension().location(),bindings.size(),sleeping,paused,terrain.resident(),terrain.baked(),lastMillis,workerMillis);}
+ @Override public void close(){var future=running;running=null;stepping=null;if(future!=null)try{future.get(5,java.util.concurrent.TimeUnit.SECONDS);}catch(Exception ignored){}worker.shutdownNow();NativeBridge.destroyScene0(scene);bindings.clear();pending.clear();rigs.clear();dolls.clear();chains.clear();chainJoints.clear();chainEndJoints.clear();chainLimits.clear();}
 }

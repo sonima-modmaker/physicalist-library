@@ -19,9 +19,13 @@ public final class PhysicalistLibrary {
         modBus.addListener(PhysicalistNetwork::register);
         NeoForge.EVENT_BUS.addListener(PhysicalistCommands::register);
         NeoForge.EVENT_BUS.addListener(NoCullPacket::onStartTracking);
-        org.slf4j.LoggerFactory.getLogger("Physicalist").info("Physicalist 0.9 articulated chains update: {}",dev.physicalist.nativecore.NativeBridge.STATUS);
+        org.slf4j.LoggerFactory.getLogger("Physicalist").info("Physicalist 0.17 threaded physics: {}",dev.physicalist.nativecore.NativeBridge.STATUS);
+        // Rigid-body steps run on a physics thread per dimension: started after the level tick, picked up before the next.
+        NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.tick.LevelTickEvent.Pre event)->{
+            if(event.getLevel() instanceof net.minecraft.server.level.ServerLevel level)dev.physicalist.nativecore.NativeWorlds.settle(level);
+        });
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.tick.LevelTickEvent.Post event)->{
-            if(event.getLevel() instanceof net.minecraft.server.level.ServerLevel level)dev.physicalist.nativecore.NativeWorlds.flush(level);
+            if(event.getLevel() instanceof net.minecraft.server.level.ServerLevel level)dev.physicalist.nativecore.NativeWorlds.launch(level);
         });
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.level.LevelEvent.Unload event)->{
             if(event.getLevel() instanceof net.minecraft.server.level.ServerLevel level){dev.physicalist.nativecore.NativeWorlds.close(level);dev.physicalist.soft.SoftWorlds.close(level);}
