@@ -148,6 +148,6 @@ project and built JAR. The project began from the
 
 Physicalist now includes mass-aware rigid states, XPBD elastic distance joints and ball sockets, damping, break forces, swing limits, a spatial obstacle index and opt-in solver counters. Existing adapters remain source-compatible.
 
-Try `/physicalist ragdoll [online player]` to spawn a separate six-part skin dummy, then grab it with the physics wand. Use `/physicalist stats start` and `/physicalist stats` to inspect solver work.
+Try `/physicalist ragdoll [online player]` to spawn a separate six-part skin dummy, then grab it with the physics wand. Add `active` (`/physicalist ragdoll active`, `/physicalist ragdoll mob minecraft:villager active`) for a ragdoll that stands and steps to keep its balance when shoved, and `/physicalist ragdoll ondeath true` to turn dying mobs into ragdolls. Other mods: `PhysicalistRagdolls.spawn(entity, push, active)` and `PhysicalistRagdolls.deathPush(entity, push)`. Use `/physicalist stats start` and `/physicalist stats` to inspect solver work.
 
 Read the detailed [elasticity and developer guide](docs/ELASTICITY.md) or the [Russian guide](docs/ru/ELASTICITY_RU.md) for units, integration examples, persistence, performance and limitations.

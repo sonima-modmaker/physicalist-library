@@ -173,14 +173,22 @@ public final class NativeWorld implements AutoCloseable {
  }
  private long gatherNanos;
  /**
-  * A command, packet or other mod moved or pushed the entity while its step was on the physics thread. Its change
-  * wins: the step result is not written over it, and the next step picks it up as an external change.
+  * The step result with whatever the server thread did to the body while the step ran on the physics thread: a
+  * teleport keeps its pose, and a push, punch or wand drag adds its velocity change on top of the step. Dropping
+  * the result instead froze a body held by the wand (its every tick was thrown away), and writing the result over
+  * the change lost punches and drags of ragdoll limbs.
   */
- private static boolean movedMeanwhile(Binding b){if(!(b.source instanceof BodySource)||b.sent==null)return false;double[] now=state(b.source);if(poseChanged(now,b.sent)){double dot=0;for(int i=3;i<7;i++)dot+=now[i]*b.sent[i];if(dot<0)for(int i=3;i<7;i++)now[i]=-now[i];if(poseChanged(now,b.sent))return true;}for(int a=7;a<13;a++)if(Math.abs(now[a]-b.sent[a])>1e-7)return true;return false;}
+ private static double[] merged(Binding b,double[] s){
+  if(!(b.source instanceof BodySource||b.source instanceof LimbSource)||b.sent==null)return s;
+  double[] now=state(b.source),out=s.clone();for(int i=0;i<13;i++)if(!Double.isFinite(now[i]))return s;double dot=0;for(int i=3;i<7;i++)dot+=now[i]*b.sent[i];if(dot<0)for(int i=3;i<7;i++)now[i]=-now[i];
+  if(poseChanged(now,b.sent))System.arraycopy(now,0,out,0,7);
+  for(int i=7;i<13;i++){double change=now[i]-b.sent[i];if(Math.abs(change)>1e-7)out[i]+=change;}
+  return out;
+ }
  /** Reads the finished step back into the entities and runs the per-tick bookkeeping. */
  private void complete(){List<Binding> live=stepping==null?List.of():stepping;stepping=null;long applyStarted=System.nanoTime();
   if(!live.isEmpty()){long[] ids=new long[live.size()];for(int i=0;i<ids.length;i++)ids[i]=live.get(i).id;double[] output=NativeBridge.read0(scene,ids);sleeping=0;
-   for(int i=0;i<live.size();i++){Binding b=live.get(i);b.last=Arrays.copyOfRange(output,i*15,(i+1)*15);var s=b.last;boolean rest=s[14]!=0;if(rest)sleeping++;if(b.source.owner().isRemoved()||movedMeanwhile(b))continue;b.source.accept(new Vec3(s[0],s[1],s[2]),new Quaternionf((float)s[3],(float)s[4],(float)s[5],(float)s[6]),new Vec3(s[7],s[8],s[9]).scale(.05),new Vec3(s[10],s[11],s[12]).scale(.05),rest);}
+   for(int i=0;i<live.size();i++){Binding b=live.get(i);b.last=Arrays.copyOfRange(output,i*15,(i+1)*15);var s=b.last;boolean rest=s[14]!=0;if(rest)sleeping++;if(b.source.owner().isRemoved())continue;double[] o=merged(b,s);b.source.accept(new Vec3(o[0],o[1],o[2]),new Quaternionf((float)o[3],(float)o[4],(float)o[5],(float)o[6]),new Vec3(o[7],o[8],o[9]).scale(.05),new Vec3(o[10],o[11],o[12]).scale(.05),rest);}
    Map<Long,Binding> byId=new HashMap<>();for(var b:live)byId.put(b.id,b);
    for(var b:live){double[] contacts=NativeBridge.contacts0(scene,b.id);for(int at=0;at+9<contacts.length&&!b.source.owner().isRemoved();at+=10){Binding other=byId.get((long)contacts[at+1]);Vec3 point=new Vec3(contacts[at+5],contacts[at+6],contacts[at+7]);Vec3 relative=b.before.add(b.beforeAngular.cross(point.subtract(b.beforeCenter))).subtract(other==null?external.velocity((long)contacts[at+1]):other.before.add(other.beforeAngular.cross(point.subtract(other.beforeCenter)))),normal=new Vec3(contacts[at+2],contacts[at+3],contacts[at+4]);double speed=Math.max(0,-relative.dot(normal));external.reaction((long)contacts[at+1],new Vec3(contacts[at+5],contacts[at+6],contacts[at+7]),normal.scale(contacts[at+9]*.05));b.source.impact((int)contacts[at],new CompoundCollision.Contact(normal,new Vec3(contacts[at+5],contacts[at+6],contacts[at+7]),contacts[at+8]),speed,contacts[at+9]*.05);}}
   }

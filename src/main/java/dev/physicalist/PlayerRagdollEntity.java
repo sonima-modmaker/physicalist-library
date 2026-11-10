@@ -63,21 +63,129 @@ public final class PlayerRagdollEntity extends Entity implements PhysicalistBody
  public CompoundTag mobData(){return mob.getCompound("Data");}
  public boolean sleeping(){return sleeping;}
  public boolean pausedForChunks(){return pausedForChunks;}
- public void initialize(Player player,Vec3 at){owner=player.getGameProfile();setPos(at);ensure();for(var p:parts){p.velocity=player.getDeltaMovement();p.angular=Vec3.ZERO;}publish();}
+ /** Ragdoll of a player at a point (torso centre), facing where the player faces. */
+ public void initialize(Player player,Vec3 at){owner=player.getGameProfile();setPos(at);ensure();place(player.yBodyRot,false,player.getDeltaMovement(),Double.NaN);publish();}
  /** Ragdoll copy of any entity, standing where it stands and facing where it faces. */
- public void initialize(Entity source){
-  var tag=new CompoundTag();tag.putString("Type",EntityType.getKey(source.getType()).toString());tag.putDouble("W",source.getBbWidth());tag.putDouble("H",source.getBbHeight());
-  var data=source.saveWithoutId(new CompoundTag());for(String key:List.of("Pos","Motion","Rotation","UUID","Passengers","Brain","Inventory","Items","ArmorItems","HandItems","Attributes","ActiveEffects","Leash","Offers","Gossips"))data.remove(key);
-  if(data.sizeInBytes()<8192)tag.put("Data",data);setMob(tag);
-  setPos(source.position().add(0,rig.center[1].y,0));ensure();
-  // A ragdoll built in its exact rest pose balances like a statue: two legs only until a wobble puts it to sleep, four
-  // flat feet for good. It starts tipping over sideways (about its facing axis); an animal already lies half on its side.
+ public void initialize(Entity source){initialize(source,false);}
+ /**
+  * Ragdoll copy of any entity, standing where it stands and facing where it faces. An active one stands up straight
+  * and keeps its balance (see {@link #setActive}); a limp one starts tipping over.
+  */
+ public void initialize(Entity source,boolean active){
+  if(source instanceof Player player){owner=player.getGameProfile();setPos(source.position().add(0,rig.center[1].y,0));ensure();}
+  else{
+   var tag=new CompoundTag();tag.putString("Type",EntityType.getKey(source.getType()).toString());tag.putDouble("W",source.getBbWidth());tag.putDouble("H",source.getBbHeight());
+   var data=source.saveWithoutId(new CompoundTag());for(String key:List.of("Pos","Motion","Rotation","UUID","Passengers","Brain","Inventory","Items","ArmorItems","HandItems","Attributes","ActiveEffects","Leash","Offers","Gossips","HurtTime","DeathTime","Health","CustomName"))data.remove(key);
+   if(data.sizeInBytes()<8192)tag.put("Data",data);setMob(tag);
+   setPos(source.position().add(0,rig.center[1].y,0));ensure();
+  }
+  this.active=active;place(source instanceof LivingEntity living?living.yBodyRot:source.getYRot(),!active,source.getDeltaMovement(),source.getY());
+  publish();
+ }
+ /**
+  * Turns the rest pose to a facing and sets it on the ground (groundY, NaN keeps the height). A ragdoll built in its
+  * exact rest pose balances like a statue: two legs only until a wobble puts it to sleep, four flat feet for good. A
+  * limp one starts tipping over sideways (about its facing axis); an animal already lies half on its side.
+  */
+ private void place(float yaw,boolean tip,Vec3 velocity,double groundY){
   var random=level().getRandom();float side=random.nextBoolean()?1:-1;
-  var turn=new Quaternionf().rotationY((float)Math.toRadians(-(source instanceof LivingEntity living?living.yBodyRot:source.getYRot())));if(!rig.upright())turn.rotateZ(side*1.2F);
-  var f=turn.transform(new org.joml.Vector3f(0,0,1));Vec3 roll=new Vec3(f.x,f.y,f.z).scale(side*.07),c=parts.get(1).position;double lowest=Double.MAX_VALUE;
-  for(var p:parts){var d=turn.transform(new org.joml.Vector3f((float)(p.position.x-c.x),(float)(p.position.y-c.y),(float)(p.position.z-c.z)));p.position=c.add(d.x,d.y,d.z);p.orientation.set(turn);p.velocity=source.getDeltaMovement();p.angular=roll.add(new Vec3(random.nextGaussian(),random.nextGaussian()*.2,random.nextGaussian()).scale(.03));lowest=Math.min(lowest,CompoundCollision.bounds(p.box()).minY);}
-  double lift=source.getY()+.02-lowest;for(var p:parts)p.position=p.position.add(0,lift,0);
-  snapshot();refresh();publish();
+  var turn=new Quaternionf().rotationY((float)Math.toRadians(-yaw));if(tip&&!rig.upright())turn.rotateZ(side*1.2F);
+  var f=turn.transform(new org.joml.Vector3f(0,0,1));Vec3 roll=tip?new Vec3(f.x,f.y,f.z).scale(side*.07):Vec3.ZERO,c=parts.get(1).position;double lowest=Double.MAX_VALUE;
+  for(var p:parts){var d=turn.transform(new org.joml.Vector3f((float)(p.position.x-c.x),(float)(p.position.y-c.y),(float)(p.position.z-c.z)));p.position=c.add(d.x,d.y,d.z);p.orientation.set(turn);p.velocity=velocity;p.angular=tip?roll.add(new Vec3(random.nextGaussian(),random.nextGaussian()*.2,random.nextGaussian()).scale(.03)):Vec3.ZERO;lowest=Math.min(lowest,CompoundCollision.bounds(p.box()).minY);}
+  if(!Double.isNaN(groundY)){double lift=groundY+.02-lowest;for(var p:parts)p.position=p.position.add(0,lift,0);}
+  snapshot();refresh();
+ }
+
+ private boolean active,fallen;private int stepLeg=-1,stepTicks;private Vec3 stepTarget=Vec3.ZERO;private double heading=Double.NaN;
+ /** Whether this ragdoll tries to keep its balance. */
+ public boolean active(){return active;}
+ /** An active ragdoll that was pushed past recovery and now lies limp. */
+ public boolean fallen(){return fallen;}
+ /**
+  * Active ragdolls (upright ones: players, zombies, villagers...) lean against a push and step under their centre of
+  * mass to stay on their feet; once tipped past recovery they go limp. Turning it off makes the ragdoll limp at once.
+  */
+ public void setActive(boolean value){active=value;fallen=false;stepLeg=-1;stepTicks=0;heading=Double.NaN;sleeping=false;quiet=0;}
+ private static final int STEP_TICKS=7;
+ /**
+  * Balance as a capture-point controller on the limbs' velocities (applied before each physics step): the torso and
+  * head are turned upright, and when the point the body would come to rest over leaves the feet, the leg farther
+  * from it swings there (lifting its foot on the way) while the other leg stays planted under its hip.
+  */
+ private void balance(){
+  if(!active||fallen||!rig.upright())return;double strength=PhysicalistConfig.RAGDOLL_BALANCE.get();if(strength<=0)return;
+  var torso=parts.get(1);Vec3 up=torso.vector(new Vec3(0,1,0));
+  if(up.y<Math.cos(1.0)){fallen=true;stepLeg=-1;return;}
+  double total=0;Vec3 com=Vec3.ZERO,vel=Vec3.ZERO;for(var p:parts){double m=1/p.inverseMass;total+=m;com=com.add(p.position.scale(m));vel=vel.add(p.velocity.scale(m));}com=com.scale(1/total);vel=vel.scale(1/total);
+  Vec3[] foot=new Vec3[2];for(int k=0;k<2;k++){var leg=parts.get(4+k);foot[k]=leg.position.add(leg.vector(new Vec3(0,-leg.half.y,0)));}
+  // In the air (thrown, held by the wand) there is nothing to balance on; it catches itself when it lands.
+  boolean grounded=false;for(var f:foot)grounded|=level().getBlockCollisions(this,new AABB(f,f).inflate(.12,.1,.12)).iterator().hasNext();
+  if(!grounded){stepLeg=-1;stepTicks=0;return;}
+  Vec3 support=foot[0].add(foot[1]).scale(.5);double scale=rig.center[1].y/1.125,g=Math.max(1e-4,PhysicalistConfig.defaults().gravity());
+  double height=Math.max(.3*scale,com.y-support.y);
+  Vec3 capture=new Vec3(com.x+vel.x*Math.sqrt(height/g),support.y,com.z+vel.z*Math.sqrt(height/g));
+  Vec3 offset=new Vec3(capture.x-support.x,0,capture.z-support.z);
+  if(stepTicks>0&&--stepTicks==0)stepLeg=-1;
+  if(stepLeg<0&&offset.length()>.1*scale){
+   stepLeg=foot[0].distanceToSqr(capture)>foot[1].distanceToSqr(capture)?0:1;stepTicks=STEP_TICKS;
+   Vec3 reach=offset.scale(1.2);if(reach.length()>.7*scale)reach=reach.normalize().scale(.7*scale);
+   stepTarget=support.add(reach);
+  }
+  // Caught: a last step brings the far foot back under its hip, as a person gathers their feet after a stumble.
+  // Left in a split stance, the next small wobble set off another step and the ragdoll wandered off.
+  if(stepLeg<0&&offset.length()<.05*scale&&new Vec3(vel.x,0,vel.z).length()<.02){
+   Vec3 under=new Vec3(torso.position.x,support.y,torso.position.z);int far=-1;double worst=.14*scale;
+   for(int k=0;k<2;k++){Vec3 hip=under.add(flat(torso.vector(new Vec3(1,0,0))).scale(rig.torsoAnchor[4+k].x));double d=new Vec3(foot[k].x-hip.x,0,foot[k].z-hip.z).length();if(d>worst){worst=d;far=k;}}
+   if(far>=0){stepLeg=far;stepTicks=STEP_TICKS;stepTarget=under;}
+  }
+  Vec3 flatForward=flat(torso.vector(new Vec3(1,0,0)));
+  for(int k=0;k<2;k++){
+   var leg=parts.get(4+k);Vec3 hip=torso.position.add(torso.vector(rig.torsoAnchor[4+k]));Vec3 target;
+   if(k==stepLeg){double side=rig.torsoAnchor[4+k].x;target=stepTarget.add(flatForward.scale(side)).add(0,.14*scale*Math.sin(Math.PI*stepTicks/STEP_TICKS),0);}
+   else target=foot[k];
+   Vec3 d=hip.subtract(target);if(d.lengthSqr()<1e-6)continue;
+   // The swinging leg turns about the hip; the planted one about its foot, which stays where it stands (turned
+   // about the hip it slid along under the body, and a ragdoll shoved back skated forward).
+   turnUp(leg,d.normalize(),(k==stepLeg?.6:.3)*strength);if(k==stepLeg)pivot(leg,torso,hip);else leg.velocity=leg.angular.cross(leg.position.subtract(foot[k]));
+  }
+  // Braking: planted feet take the body's way out (as friction under pushing legs would). Leaning back against the
+  // motion keeps the centre of mass behind the feet; leaning into it made the ragdoll run off and never stop.
+  {Vec3 brake=new Vec3(vel.x,0,vel.z).scale(.12*Math.min(1,strength));
+   // Ankles: with both feet down, the body is drawn back over the middle of its feet. Without it a ragdoll that
+   // had caught itself kept leaning a little, crept off at walking pace and never lowered its arms.
+   if(stepLeg<0){Vec3 ankle=new Vec3(support.x-com.x,0,support.z-com.z).scale(.06*Math.min(1,strength));if(ankle.length()>.012)ankle=ankle.normalize().scale(.012);brake=brake.subtract(ankle);}
+   for(var p:parts)p.velocity=p.velocity.subtract(brake);}
+  Vec3 lean=offset.length()>1e-6?offset.normalize().scale(-Math.min(.2,offset.length()*.5)):Vec3.ZERO;
+  turnUp(torso,new Vec3(0,1,0).add(lean).normalize(),.45*strength);
+  // Keep facing the same way: a free twist let every shove turn the ragdoll and it walked off sideways.
+  {Vec3 f=flat(torso.vector(new Vec3(0,0,1)));double yaw=Math.atan2(f.x,f.z);if(Double.isNaN(heading))heading=yaw;
+   double error=Math.atan2(Math.sin(heading-yaw),Math.cos(heading-yaw));Vec3 u=torso.vector(new Vec3(0,1,0));double spin=torso.angular.dot(u);
+   torso.angular=torso.angular.add(u.scale((error*.25*strength-spin)*.6));}
+  // Standing height: the hips sank between the legs while stepping, as if it crawled on its knees.
+  {double sag=support.y+rig.center[1].y-torso.position.y;if(sag>.03*scale){double lift=Math.min(.05,sag*.3);for(int i=0;i<4;i++)parts.get(i).velocity=parts.get(i).velocity.add(0,lift,0);}}
+  turnUp(parts.get(0),new Vec3(0,1,0),.25*strength);pivot(parts.get(0),torso,torso.position.add(torso.vector(rig.torsoAnchor[0])));
+  // Arms balance: the harder the body is thrown off its feet, the further they fly out to the sides and against the
+  // fall (forward when falling back), the way people windmill to catch themselves; calm, they hang.
+  double alarm=Math.clamp(offset.length()/(.3*scale),0,1);if(stepLeg>=0)alarm=Math.max(alarm,.35);Vec3 against=offset.length()>1e-6?offset.normalize().scale(-1):Vec3.ZERO;
+  for(int k=0;k<2;k++){double side=rig.torsoAnchor[2+k].x>0?1:-1;var arm=parts.get(2+k);
+   Vec3 reach=new Vec3(0,-1,0).scale(1-alarm).add(flatForward.scale(side*.9).add(against.scale(.8)).add(0,.35,0).scale(alarm));
+   if(reach.lengthSqr()<1e-6)reach=new Vec3(0,-1,0);
+   turnUp(arm,reach.normalize().scale(-1),(.15+.35*alarm)*strength);pivot(arm,torso,torso.position.add(torso.vector(rig.torsoAnchor[2+k])));}
+ }
+ /**
+  * A limb turned by the controller swings about its joint, not its own middle: its centre moves with the joint.
+  * Turning it about the middle tore the hip apart (legs drawn away from the body) until the joint pulled it back.
+  */
+ private static void pivot(RigidBodyState limb,RigidBodyState torso,Vec3 joint){
+  limb.velocity=torso.pointVelocity(joint).add(limb.angular.cross(limb.position.subtract(joint)));
+ }
+ private static Vec3 flat(Vec3 v){Vec3 f=new Vec3(v.x,0,v.z);return f.lengthSqr()<1e-8?new Vec3(1,0,0):f.normalize();}
+ /** Steers a limb's angular velocity so its local up axis turns toward a direction, keeping a little of its twist. */
+ private static void turnUp(RigidBodyState part,Vec3 direction,double gain){
+  Vec3 u=part.vector(new Vec3(0,1,0)),error=u.cross(direction);if(u.dot(direction)<0)error=error.lengthSqr()<1e-8?new Vec3(1,0,0):error.normalize();
+  Vec3 twist=u.scale(part.angular.dot(u)*.6);Vec3 goal=error.scale(gain).add(twist);
+  if(goal.subtract(part.angular).lengthSqr()<1e-6)return;
+  Vec3 next=part.angular.lerp(goal,.7);if(next.length()>.6)next=next.normalize().scale(.6);part.angular=next;
  }
  private void setMob(CompoundTag tag){mob=tag;rig=tag.contains("Type")?Rig.of(Math.clamp(tag.getDouble("W"),.1,6),Math.clamp(tag.getDouble("H"),.1,6)):Rig.PLAYER;if(ready){ready=false;parts.clear();joints.clear();}if(!level().isClientSide)entityData.set(MOB,tag);}
  private void ensure(){if(ready)return;ready=true;Vec3 torso=rig.center[1];for(int i=0;i<6;i++)parts.add(new RigidBodyState(position().add(rig.center[i].subtract(torso)),rig.half[i],rig.mass[i]));
@@ -89,8 +197,9 @@ public final class PlayerRagdollEntity extends Entity implements PhysicalistBody
  public Quaternionf renderRotation(int i,float partial){ensure();return new Quaternionf(previousQ[i]).slerp(parts.get(i).orientation,partial);}
  @Override public void tick(){super.tick();ensure();snapshot();
   if(level().isClientSide){if(lerp>0){double alpha=1.0/lerp--;for(int i=0;i<6;i++){parts.get(i).position=parts.get(i).position.lerp(target[i],alpha);parts.get(i).orientation.slerp(targetQ[i],(float)alpha);}}refresh();return;}
-  if(++age>=12000){discard();return;}
+  if(++age>=PhysicalistConfig.RAGDOLL_LIFETIME.get()*20){discard();return;}
   if(getDeltaMovement().lengthSqr()>1e-8){for(var p:parts)p.velocity=p.velocity.add(getDeltaMovement());setDeltaMovement(Vec3.ZERO);sleeping=false;quiet=0;}
+  balance();
   if(dev.physicalist.nativecore.NativeWorlds.enqueue(this))return;
   if(sleeping&&PhysicalistExternalCollisions.available()&&tickCount%5==0&&!PhysicalistExternalCollisions.gather((ServerLevel)level(),this,getBoundingBox().inflate(.1)).isEmpty()){sleeping=false;quiet=0;}
   if(sleeping){if(tickCount%10!=0||supported()){refresh();return;}sleeping=false;quiet=0;}
@@ -154,10 +263,18 @@ public final class PlayerRagdollEntity extends Entity implements PhysicalistBody
  }
  private static Vec3 limited(Vec3 v,double cap){if(!RigidBodyState.finite(v))return Vec3.ZERO;return v.length()>cap?v.normalize().scale(cap):v;}
  @Override public void onSyncedDataUpdated(EntityDataAccessor<?> key){super.onSyncedDataUpdated(key);if(!level().isClientSide)return;if(MOB.equals(key))setMob(entityData.get(MOB));if(POSE.equals(key))readState(entityData.get(POSE),true);}
- @Override protected void addAdditionalSaveData(CompoundTag tag){ensure();tag.put("Ragdoll",state());tag.put("Mob",mob);}
- @Override protected void readAdditionalSaveData(CompoundTag tag){setMob(tag.getCompound("Mob"));readState(tag.getCompound("Ragdoll"),false);publish();}
+ @Override protected void addAdditionalSaveData(CompoundTag tag){ensure();tag.put("Ragdoll",state());tag.put("Mob",mob);tag.putBoolean("Active",active);tag.putBoolean("Fallen",fallen);}
+ @Override protected void readAdditionalSaveData(CompoundTag tag){setMob(tag.getCompound("Mob"));readState(tag.getCompound("Ragdoll"),false);active=tag.getBoolean("Active");fallen=tag.getBoolean("Fallen");publish();}
  @Override public boolean isPickable(){return true;}
- @Override public boolean hurt(net.minecraft.world.damagesource.DamageSource source,float amount){if(!level().isClientSide){Vec3 direction=source.getEntity()==null?new Vec3(0,.1,0):position().subtract(source.getEntity().position()).normalize().scale(.15);for(var p:parts)p.velocity=p.velocity.add(direction);sleeping=false;quiet=0;}return true;}
+ /** A hit shoves the ragdoll away from the attacker, hardest at the limb that was hit. */
+ @Override public boolean hurt(net.minecraft.world.damagesource.DamageSource source,float amount){
+  if(level().isClientSide||isInvulnerableTo(source))return false;ensure();Entity by=source.getEntity();
+  Vec3 direction=by instanceof LivingEntity living?living.getLookAngle():by!=null?position().subtract(by.position()):new Vec3(0,1,0);
+  direction=new Vec3(direction.x,Math.max(direction.y,0)*.3+.05,direction.z);if(!RigidBodyState.finite(direction)||direction.lengthSqr()<1e-8)direction=new Vec3(0,1,0);
+  Vec3 push=direction.normalize().scale(Math.min(.5,.14+.02*amount));int hit=1;
+  if(by instanceof Player player){Vec3 eye=player.getEyePosition(),end=eye.add(player.getLookAngle().scale(8));double nearest=Double.POSITIVE_INFINITY;for(int i=0;i<parts.size();i++){double f=PhysicalistTargeting.rayFraction(parts.get(i).box(),eye,end);if(f<nearest){nearest=f;hit=i;}}}
+  for(int i=0;i<parts.size();i++)parts.get(i).velocity=parts.get(i).velocity.add(push.scale(i==hit?1.6:.8));sleeping=false;quiet=0;return true;
+ }
  @Override public void physicalistDrag(Player player,Vec3 goal){ensure();Vec3 shift=GrabController.velocity(goal.subtract(parts.get(1).position),parts.get(1).velocity,physicalistBody().profile().gravity()).subtract(parts.get(1).velocity);for(var p:parts)p.velocity=p.velocity.add(shift);sleeping=false;quiet=0;}
  private final PhysicsBody adapter=new PhysicsBody(){
   public Entity entity(){return PlayerRagdollEntity.this;}public List<CompoundCollision.Box> collisionBoxes(){ensure();return parts.stream().map(RigidBodyState::box).toList();}

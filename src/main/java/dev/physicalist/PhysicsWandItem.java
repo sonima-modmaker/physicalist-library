@@ -29,6 +29,9 @@ public final class PhysicsWandItem extends Item {
     @Override public void onUseTick(Level level, LivingEntity user, ItemStack stack, int remaining) {
         if (!(level instanceof ServerLevel server) || !(user instanceof Player player)
                 || !player.getAbilities().instabuild) return;
+        // Players tick after the level, while the next physics step already runs on its own thread. Waiting for it
+        // lets the wand steer from the body's current pose instead of the one a tick old (which made it overshoot).
+        dev.physicalist.nativecore.NativeWorlds.settle(server);
         var data = player.getPersistentData();
         Entity entity = data.hasUUID(TARGET) ? server.getEntity(data.getUUID(TARGET)) : null;
         PhysicsBody body = entity == null ? null : PhysicalistBodies.find(entity);
@@ -68,6 +71,7 @@ public final class PhysicsWandItem extends Item {
         if (!(player.level() instanceof ServerLevel server)) return;
         var data = player.getPersistentData();
         if (!data.hasUUID(TARGET)) return;
+        dev.physicalist.nativecore.NativeWorlds.settle(server);
         Entity entity = server.getEntity(data.getUUID(TARGET));
         if (entity == null) return;
         PhysicsBody body = PhysicalistBodies.find(entity);

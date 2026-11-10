@@ -57,6 +57,10 @@ public final class PhysicalistConfig {
     public static final ModConfigSpec.DoubleValue WATER_DEFAULT_DENSITY = B.comment("Density for bodies from other mods that do not specify one. Physical blocks use their material (wood floats, stone and metal sink).").defineInRange("water.defaultDensity", 1.5, .05, 20);
     public static final ModConfigSpec.DoubleValue WATER_LINEAR_DRAG = B.comment("Water resistance to movement, per second, when fully submerged.").defineInRange("water.linearDrag", 1.5, 0, 20);
     public static final ModConfigSpec.DoubleValue WATER_ANGULAR_DRAG = B.comment("Water resistance to rotation, per second, when fully submerged.").defineInRange("water.angularDrag", 2.0, 0, 20);
+    public static final ModConfigSpec.BooleanValue RAGDOLL_ON_DEATH = B.comment("Mobs (and players) that die turn into ragdolls, keeping the push of the killing blow. Also /physicalist ragdoll ondeath.").define("ragdolls.onDeath", false);
+    public static final ModConfigSpec.BooleanValue RAGDOLL_ON_DEATH_PLAYERS = B.comment("With ragdolls.onDeath, also leave a ragdoll where a player dies.").define("ragdolls.onDeathPlayers", true);
+    public static final ModConfigSpec.IntValue RAGDOLL_LIFETIME = B.comment("Seconds before a ragdoll disappears.").defineInRange("ragdolls.lifetimeSeconds", 600, 5, 36000);
+    public static final ModConfigSpec.DoubleValue RAGDOLL_BALANCE = B.comment("Strength of active ragdolls' balance (1 = default). Active ragdolls step and lean to stay on their feet until they fall.").defineInRange("ragdolls.balanceStrength", 1.0, 0, 4);
     public static final ModConfigSpec.BooleanValue EXPERIMENTAL_SOFT_BODIES = B.comment("Experimental: soft bodies (the Physicalist tool's menu: deformable cars and planes from model files). Off by default.").define("experimental.softBodies", false);
     public static boolean softBodies() {
         try { return EXPERIMENTAL_SOFT_BODIES.get(); } catch (IllegalStateException notLoaded) { return false; }

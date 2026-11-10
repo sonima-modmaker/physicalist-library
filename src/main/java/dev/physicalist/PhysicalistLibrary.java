@@ -19,7 +19,7 @@ public final class PhysicalistLibrary {
         modBus.addListener(PhysicalistNetwork::register);
         NeoForge.EVENT_BUS.addListener(PhysicalistCommands::register);
         NeoForge.EVENT_BUS.addListener(NoCullPacket::onStartTracking);
-        org.slf4j.LoggerFactory.getLogger("Physicalist").info("Physicalist 0.17 threaded physics: {}",dev.physicalist.nativecore.NativeBridge.STATUS);
+        org.slf4j.LoggerFactory.getLogger("Physicalist").info("Physicalist 0.18 ragdolls: {}",dev.physicalist.nativecore.NativeBridge.STATUS);
         // Rigid-body steps run on a physics thread per dimension: started after the level tick, picked up before the next.
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.tick.LevelTickEvent.Pre event)->{
             if(event.getLevel() instanceof net.minecraft.server.level.ServerLevel level)dev.physicalist.nativecore.NativeWorlds.settle(level);
@@ -33,6 +33,8 @@ public final class PhysicalistLibrary {
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.server.ServerStoppedEvent event)->{
             dev.physicalist.nativecore.NativeWorlds.closeAll();dev.physicalist.soft.SoftWorlds.closeAll();PhysicalistBodies.clear();PhysicsMetrics.stop();PhysicsMetrics.reset();
         });
+        NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.LOWEST, false, net.neoforged.neoforge.event.entity.living.LivingDeathEvent.class, PhysicalistRagdolls::onDeath);
+        NeoForge.EVENT_BUS.addListener(PhysicalistRagdolls::tick);
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.tick.PlayerTickEvent.Post event) ->
                 PhysicalistWalkingCollision.recoverOverlap(event.getEntity()));
     }

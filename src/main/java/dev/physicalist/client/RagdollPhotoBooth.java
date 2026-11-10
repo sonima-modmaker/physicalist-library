@@ -25,7 +25,7 @@ import net.neoforged.neoforge.client.event.ScreenEvent;
 @EventBusSubscriber(modid = "physicalist_library", value = Dist.CLIENT)
 public final class RagdollPhotoBooth {
     private static final boolean ENABLED = Boolean.getBoolean("physicalist.photo");
-    private static final int[] SHOTS = {62, 200};
+    private static final int[] SHOTS = {80, 106, 114, 130, 220};
     private static boolean started;
     private static int ticks = -1, shot;
 
@@ -60,18 +60,43 @@ public final class RagdollPhotoBooth {
                 player.getAbilities().flying = true;
                 player.onUpdateAbilities();
                 player.teleportTo(level, ground.getX() + .5, ground.getY() + 2.2, ground.getZ() - 4.5, 0, 18);
-                EntityType<?>[] types = {EntityType.PIG, EntityType.COW, EntityType.SHEEP, EntityType.ZOMBIE, EntityType.VILLAGER, EntityType.WOLF, EntityType.CHICKEN, EntityType.SPIDER};
+                EntityType<?>[] types = {EntityType.VILLAGER, EntityType.VILLAGER, EntityType.VILLAGER, EntityType.WANDERING_TRADER, EntityType.WITCH, EntityType.PILLAGER, EntityType.ZOMBIE, EntityType.SHEEP, EntityType.PLAYER};
+                var professions = new net.minecraft.world.entity.npc.VillagerProfession[]{net.minecraft.world.entity.npc.VillagerProfession.FARMER, net.minecraft.world.entity.npc.VillagerProfession.LIBRARIAN, net.minecraft.world.entity.npc.VillagerProfession.ARMORER};
+                var biomes = new net.minecraft.world.entity.npc.VillagerType[]{net.minecraft.world.entity.npc.VillagerType.PLAINS, net.minecraft.world.entity.npc.VillagerType.DESERT, net.minecraft.world.entity.npc.VillagerType.SNOW};
                 for (int i = 0; i < types.length; i++) {
-                    var mob = types[i].create(level);
-                    mob.moveTo(ground.getX() + .5 + (i - 3.5) * 1.6, ground.getY() + .05, ground.getZ() + 2.5, 180, 0);
-                    if (mob instanceof net.minecraft.world.entity.LivingEntity living) living.yBodyRot = 180;
+                    double x = ground.getX() + .5 + (i - 4) * 2, z = ground.getZ() + 4.5;
                     var doll = dev.physicalist.PhysicalistContent.PLAYER_RAGDOLL.get().create(level);
-                    doll.initialize(mob);
-                    mob.discard();
+                    if (types[i] == EntityType.PLAYER) {
+                        player.setYBodyRot(180);
+                        doll.initialize(player, new net.minecraft.world.phys.Vec3(x, ground.getY() + 1.15, z));
+                        doll.setActive(true);
+                    } else {
+                        var mob = types[i].create(level);
+                        mob.moveTo(x, ground.getY() + .05, z, 180, 0);
+                        if (mob instanceof net.minecraft.world.entity.LivingEntity living) living.yBodyRot = 180;
+                        if (mob instanceof net.minecraft.world.entity.npc.Villager villager)
+                            villager.setVillagerData(new net.minecraft.world.entity.npc.VillagerData(biomes[i], professions[i], 2));
+                        doll.initialize(mob, true);
+                        mob.discard();
+                    }
                     level.addFreshEntity(doll);
                 }
+                // A real farmer to compare the ragdolls' clothes with.
+                var reference = EntityType.VILLAGER.create(level);
+                reference.moveTo(ground.getX() + .5 + 5 * 2, ground.getY(), ground.getZ() + 4.5, 180, 0);
+                reference.yBodyRot = reference.yHeadRot = 180;
+                reference.setNoAi(true);
+                reference.setVillagerData(new net.minecraft.world.entity.npc.VillagerData(net.minecraft.world.entity.npc.VillagerType.PLAINS, net.minecraft.world.entity.npc.VillagerProfession.FARMER, 2));
+                level.addFreshEntity(reference);
             });
         }
+        // A shove to the side halfway: active ragdolls step to catch themselves.
+        if (ticks == 100) server.execute(() -> {
+            for (var doll : server.overworld().getEntitiesOfClass(dev.physicalist.PlayerRagdollEntity.class,
+                    server.getPlayerList().getPlayers().getFirst().getBoundingBox().inflate(20)))
+                // They face the camera (-z): +z shoves them backwards.
+                for (var limb : doll.limbs()) limb.velocity = limb.velocity.add(0, 0, .1);
+        });
         if (shot < SHOTS.length && ticks == SHOTS[shot]) {
             Screenshot.grab(mc.gameDirectory, "physicalist-photo-" + shot + ".png", mc.getMainRenderTarget(), message -> {});
             shot++;

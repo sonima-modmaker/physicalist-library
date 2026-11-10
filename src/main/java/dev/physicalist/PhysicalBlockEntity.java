@@ -386,6 +386,35 @@ public final class PhysicalBlockEntity extends Entity implements PhysicalistBody
 
     @Override public boolean isPickable() { return true; }
     @Override public boolean isPushable() { return true; }
+
+    /** A punch or hit shoves the body away from the attacker and spins it about the point that was hit. */
+    @Override public boolean hurt(net.minecraft.world.damagesource.DamageSource source, float amount) {
+        if (level().isClientSide || isInvulnerableTo(source) || localShape.isEmpty()) return false;
+        Entity by = source.getEntity();
+        Vec3 direction = by instanceof net.minecraft.world.entity.LivingEntity living ? living.getLookAngle()
+                : by != null ? position().subtract(by.position()).normalize() : new Vec3(0, 1, 0);
+        if (!RigidBodyState.finite(direction) || direction.lengthSqr() < 1e-8) direction = new Vec3(0, 1, 0);
+        Vec3 point = centerOfMass();
+        if (by instanceof net.minecraft.world.entity.player.Player player) {
+            Vec3 eye = player.getEyePosition(), end = eye.add(player.getLookAngle().scale(8));
+            double nearest = Double.POSITIVE_INFINITY;
+            for (var box : body.collisionBoxes()) nearest = Math.min(nearest, PhysicalistTargeting.rayFraction(box, eye, end));
+            if (Double.isFinite(nearest)) point = eye.add(end.subtract(eye).scale(nearest));
+        }
+        double mass = Math.max(.1, body.aerodynamicMass());
+        Vec3 impulse = direction.normalize().scale(.3 + .04 * Math.min(amount, 40));
+        Vec3 change = impulse.scale(1 / mass);
+        if (change.length() > .6) change = change.normalize().scale(.6);
+        setDeltaMovement(getDeltaMovement().add(change));
+        double inertia = Math.max(.5, mass * collisionRadius * collisionRadius);
+        Vec3 spin = point.subtract(centerOfMass()).cross(impulse).scale(1 / inertia);
+        if (spin.length() > .4) spin = spin.normalize().scale(.4);
+        body.angular = body.angular.add(spin);
+        sleeping = false;
+        quietTicks = 0;
+        hasImpulse = true;
+        return true;
+    }
     @Override public PhysicsBody physicalistBody() { return body; }
 
     private Quaternionf orientation() {

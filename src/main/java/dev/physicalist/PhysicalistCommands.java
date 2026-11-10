@@ -29,16 +29,32 @@ public final class PhysicalistCommands {
         event.getDispatcher().register(Commands.literal("physicalist")
                 .requires(source -> source.hasPermission(2))
                 .then(Commands.literal("ragdoll")
-                        .executes(ctx -> ragdoll(ctx.getSource(),ctx.getSource().getPlayerOrException()))
+                        .executes(ctx -> ragdoll(ctx.getSource(),ctx.getSource().getPlayerOrException(),false))
+                        .then(Commands.literal("active")
+                                .executes(ctx -> ragdoll(ctx.getSource(),ctx.getSource().getPlayerOrException(),true))
+                                .then(Commands.argument("player", net.minecraft.commands.arguments.EntityArgument.player())
+                                        .executes(ctx -> ragdoll(ctx.getSource(),net.minecraft.commands.arguments.EntityArgument.getPlayer(ctx,"player"),true))))
                         .then(Commands.literal("mob")
                                 .then(Commands.argument("type", net.minecraft.commands.arguments.ResourceArgument.resource(event.getBuildContext(), net.minecraft.core.registries.Registries.ENTITY_TYPE))
                                         .suggests(net.minecraft.commands.synchronization.SuggestionProviders.SUMMONABLE_ENTITIES)
-                                        .executes(ctx -> ragdollMob(ctx.getSource(),net.minecraft.commands.arguments.ResourceArgument.getSummonableEntityType(ctx,"type").value()))))
+                                        .executes(ctx -> ragdollMob(ctx.getSource(),net.minecraft.commands.arguments.ResourceArgument.getSummonableEntityType(ctx,"type").value(),false))
+                                        .then(Commands.literal("active")
+                                                .executes(ctx -> ragdollMob(ctx.getSource(),net.minecraft.commands.arguments.ResourceArgument.getSummonableEntityType(ctx,"type").value(),true)))))
                         .then(Commands.literal("of")
                                 .then(Commands.argument("targets", net.minecraft.commands.arguments.EntityArgument.entities())
-                                        .executes(ctx -> ragdollOf(ctx.getSource(),net.minecraft.commands.arguments.EntityArgument.getEntities(ctx,"targets")))))
+                                        .executes(ctx -> ragdollOf(ctx.getSource(),net.minecraft.commands.arguments.EntityArgument.getEntities(ctx,"targets"),false))
+                                        .then(Commands.literal("active")
+                                                .executes(ctx -> ragdollOf(ctx.getSource(),net.minecraft.commands.arguments.EntityArgument.getEntities(ctx,"targets"),true)))))
+                        .then(Commands.literal("balance")
+                                .then(Commands.argument("targets", net.minecraft.commands.arguments.EntityArgument.entities())
+                                        .then(Commands.argument("on", com.mojang.brigadier.arguments.BoolArgumentType.bool())
+                                                .executes(ctx -> balance(ctx.getSource(),net.minecraft.commands.arguments.EntityArgument.getEntities(ctx,"targets"),com.mojang.brigadier.arguments.BoolArgumentType.getBool(ctx,"on"))))))
+                        .then(Commands.literal("ondeath")
+                                .executes(ctx -> {ctx.getSource().sendSuccess(()->Component.literal("Ragdolls on death: "+(PhysicalistRagdolls.onDeathEnabled()?"on":"off")),false);return 1;})
+                                .then(Commands.argument("on", com.mojang.brigadier.arguments.BoolArgumentType.bool())
+                                        .executes(ctx -> {boolean on=com.mojang.brigadier.arguments.BoolArgumentType.getBool(ctx,"on");PhysicalistRagdolls.setOnDeath(on);ctx.getSource().sendSuccess(()->Component.literal("Ragdolls on death "+(on?"on":"off")),true);return 1;})))
                         .then(Commands.argument("player", net.minecraft.commands.arguments.EntityArgument.player())
-                                .executes(ctx -> ragdoll(ctx.getSource(),net.minecraft.commands.arguments.EntityArgument.getPlayer(ctx,"player")))))
+                                .executes(ctx -> ragdoll(ctx.getSource(),net.minecraft.commands.arguments.EntityArgument.getPlayer(ctx,"player"),false))))
                 .then(Commands.literal("engine").executes(ctx -> {for(String line:dev.physicalist.nativecore.NativeWorlds.report())ctx.getSource().sendSuccess(()->Component.literal(line),false);return 1;}))
                 .then(Commands.literal("stats").executes(ctx -> stats(ctx.getSource(),"show"))
                         .then(Commands.literal("start").executes(ctx -> stats(ctx.getSource(),"start")))
@@ -69,35 +85,41 @@ public final class PhysicalistCommands {
                                         .executes(ctx -> spawnBlock(ctx, BlockPosArgument.getLoadedBlockPos(ctx, "pos")))))));
     }
 
-    private static int ragdoll(CommandSourceStack source,ServerPlayer player){
+    private static int ragdoll(CommandSourceStack source,ServerPlayer player,boolean active){
         var level=source.getLevel();int count=level.getEntitiesOfClass(PlayerRagdollEntity.class,new net.minecraft.world.phys.AABB(source.getPosition(),source.getPosition()).inflate(128)).size();
         if(count>=32)return failure(source,"At most 32 nearby test ragdolls; delete old dummies first");
         var entity=PhysicalistContent.PLAYER_RAGDOLL.get().create(level);if(entity==null)return 0;
-        entity.initialize(player,source.getPosition().add(source.getEntity() instanceof net.minecraft.world.entity.LivingEntity living?living.getLookAngle().multiply(2,0,2):Vec3.ZERO).add(0,1.25,0));
+        entity.initialize(player,source.getPosition().add(source.getEntity() instanceof net.minecraft.world.entity.LivingEntity living?living.getLookAngle().multiply(2,0,2):Vec3.ZERO).add(0,1.15,0));
+        entity.setActive(active);
         if(!level.addFreshEntity(entity))return failure(source,"Cannot spawn ragdoll");
-        source.sendSuccess(()->Component.literal("Spawned test ragdoll of "+player.getGameProfile().getName()+" #"+entity.getId()+" (player is unaffected)"),true);return 1;
+        source.sendSuccess(()->Component.literal("Spawned "+(active?"active ":"")+"ragdoll of "+player.getGameProfile().getName()+" #"+entity.getId()+" (player is unaffected)"),true);return 1;
+    }
+    private static int balance(CommandSourceStack source,java.util.Collection<? extends Entity> targets,boolean on){
+        int changed=0;for(Entity target:targets)if(target instanceof PlayerRagdollEntity doll){doll.setActive(on);changed++;}
+        int total=changed;if(total==0)return failure(source,"No ragdoll selected");
+        source.sendSuccess(()->Component.literal("Balance "+(on?"on":"off")+" for "+total+" ragdoll"+(total==1?"":"s")),true);return total;
     }
     private static boolean crowded(CommandSourceStack source){
         return source.getLevel().getEntitiesOfClass(PlayerRagdollEntity.class,new net.minecraft.world.phys.AABB(source.getPosition(),source.getPosition()).inflate(128)).size()>=32;
     }
     /** Ragdoll of a freshly spawned mob of that type (random variant), two blocks in front of the caller. */
-    private static int ragdollMob(CommandSourceStack source,net.minecraft.world.entity.EntityType<?> type){
+    private static int ragdollMob(CommandSourceStack source,net.minecraft.world.entity.EntityType<?> type,boolean active){
         if(crowded(source))return failure(source,"At most 32 nearby test ragdolls; delete old dummies first");
         var level=source.getLevel();Entity mob=type.create(level);if(mob==null)return failure(source,"Cannot create "+BuiltInRegistries.ENTITY_TYPE.getKey(type));
         Vec3 at=source.getPosition().add(source.getEntity() instanceof net.minecraft.world.entity.LivingEntity living?living.getLookAngle().multiply(2,0,2):Vec3.ZERO).add(0,.1,0);
         mob.moveTo(at.x,at.y,at.z,source.getRotation().y+180,0);if(mob instanceof net.minecraft.world.entity.Mob m){m.yBodyRot=m.getYRot();m.finalizeSpawn(level,level.getCurrentDifficultyAt(BlockPos.containing(at)),net.minecraft.world.entity.MobSpawnType.COMMAND,null);}
-        var doll=PhysicalistContent.PLAYER_RAGDOLL.get().create(level);if(doll==null)return 0;doll.initialize(mob);mob.discard();
+        var doll=PhysicalistContent.PLAYER_RAGDOLL.get().create(level);if(doll==null)return 0;doll.initialize(mob,active);mob.discard();
         if(!level.addFreshEntity(doll))return failure(source,"Cannot spawn ragdoll");
         source.sendSuccess(()->Component.literal("Spawned ragdoll of "+BuiltInRegistries.ENTITY_TYPE.getKey(type)+" #"+doll.getId()),true);return 1;
     }
     /** Turns mobs into ragdolls where they stand; players get a copy and are left alone. */
-    private static int ragdollOf(CommandSourceStack source,java.util.Collection<? extends Entity> targets){
+    private static int ragdollOf(CommandSourceStack source,java.util.Collection<? extends Entity> targets,boolean active){
         int made=0;
         for(Entity target:targets){
             if(target instanceof PlayerRagdollEntity||target instanceof PhysicalChainEntity||PhysicalistBodies.find(target)!=null)continue;
             if(crowded(source))return made>0?made:failure(source,"At most 32 nearby test ragdolls; delete old dummies first");
             var doll=PhysicalistContent.PLAYER_RAGDOLL.get().create(source.getLevel());if(doll==null)continue;
-            if(target instanceof ServerPlayer player)doll.initialize(player,player.position().add(0,PlayerRagdollEntity.Rig.PLAYER.center()[1].y,0));else doll.initialize(target);
+            doll.initialize(target,active);
             if(!source.getLevel().addFreshEntity(doll))continue;if(!(target instanceof net.minecraft.world.entity.player.Player))target.discard();made++;
         }
         int total=made;if(total==0)return failure(source,"No entity could be turned into a ragdoll");

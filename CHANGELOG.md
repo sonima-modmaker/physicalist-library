@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.18.0 — Ragdolls that keep their balance, dressed mobs, a working wand
+
+- **Wand and punches fixed.** Since 0.17 the physics step runs on its own thread, and a wand drag or a punch made
+  while it ran was thrown away: grabbed bodies did not move and left clicks did nothing. Changes made during the step
+  are now added on top of its result, and the wand waits for the step so it steers from the current pose.
+- **Punching physical blocks** shoves them away from you and spins them about the point you hit (left click).
+  Ragdolls are pushed hardest at the limb that was hit.
+- **Active ragdolls**: `/physicalist ragdoll active [player]`, `/physicalist ragdoll mob <type> active`,
+  `/physicalist ragdoll of <targets> active`, and `/physicalist ragdoll balance <targets> true|false` to switch it
+  on any ragdoll. Upright ones (players, villagers, zombies, illagers, witches) stand, and when shoved they step to
+  catch themselves, throw their arms out against the fall, gather their feet and stand still again facing the same
+  way. Pushed past about 57° they go limp and fall. Strength: `ragdolls.balanceStrength`.
+- **Ragdolls on death** (off by default): `/physicalist ragdoll ondeath true` or `ragdolls.onDeath`. A dying mob or
+  player turns into a ragdoll that keeps the killing blow's knockback or the projectile's flight; loot and
+  experience still drop. `ragdolls.onDeathPlayers`, `ragdolls.lifetimeSeconds`.
+- **API** `dev.physicalist.PhysicalistRagdolls`: `spawn(entity, push, active)`, `deathPush(entity, push)` (for a
+  gun mod: the body flies off with the shot), `setOnDeath(boolean)`.
+- **Mob ragdolls look like the mob.** Every render layer that draws on the mob's model is cut into the limbs too:
+  villager biome and profession clothes and hats, wool, collars, eyes, drowned and stray clothing. Villagers,
+  witches and wandering traders get two real arms instead of a crossed-arms block on the chest plus two invisible
+  physical arms; illagers show their own arms. Upright mobs are drawn exactly as the model is built, so a villager's
+  robe reaches the legs (the body used to float above them).
+- **Player ragdolls** show the skin's outer layer (hat, jacket, sleeves, trousers) and slim arms for slim skins, and
+  face where the player faces.
+
 ## 0.16.4 — Soft bodies: wings that never stay bent, experimental switch
 
 - Soft bodies are now an **experimental feature, off by default**: `experimental.softBodies` in
