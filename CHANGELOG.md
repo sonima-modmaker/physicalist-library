@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.18.2 — Ragdolls step instead of skating
+
+- **Planted feet grip.** A foot that is set down holds its spot and the body's push goes into the ground through the
+  leg; only a hard shove skids it a few centimetres. Before, the barely loaded feet skated a block or more.
+  Shoved at 4 m/s a ragdoll now catches itself in 3-7 steps with its feet skidding 0.1-0.3 blocks in all.
+- **Real steps.** Steps are quicker (0.3 s) and longer; a hard shove gets a step at once. Thrown sideways it steps out
+  with the leg on that side instead of crossing its legs. Small sways are left to the ankles, which pull the body
+  back over its feet harder, instead of a stream of tiny steps that walked it off.
+- **Stands still afterwards.** At most two steps to gather its feet after a stumble (it used to shuffle in place for
+  ever), and a wide stance is kept instead of the legs squeezing the body and creeping across the floor.
+
 ## 0.18.1 — Grip, ragdolls that get up, chains on any limb
 
 - **Friction.** The ground grips like rough stone (0.9, and at least that for every body) and ragdoll limbs grip

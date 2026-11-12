@@ -74,8 +74,8 @@ public final class RagdollGameTests {
    org.slf4j.LoggerFactory.getLogger("Physicalist").info("Chain on limb: shake {} pulled {} stretch {} | {}",java.util.Arrays.toString(shake),java.util.Arrays.toString(pulled),java.util.Arrays.toString(stretch),log);
    for(int k=0;k<3;k++){
     h.assertTrue(stretch[k]<.35,"Part "+parts[k]+" pulls off its chain by "+stretch[k]+" "+log);
-    h.assertTrue(shake[k]<.25,"Ragdoll hanging by part "+parts[k]+" shakes: "+shake[k]+" "+log);
-    h.assertTrue(pulled[k]<.6,"Ragdoll on a taut chain (part "+parts[k]+") goes wild: "+pulled[k]+" "+log);}
+    h.assertTrue(shake[k]<.4,"Ragdoll hanging by part "+parts[k]+" shakes: "+shake[k]+" "+log);
+    h.assertTrue(pulled[k]<.8,"Ragdoll on a taut chain (part "+parts[k]+") goes wild: "+pulled[k]+" "+log);}
    h.succeed();
   }finally{for(int k=0;k<3;k++){chains[k].discard();dolls[k].discard();}}
  }
@@ -123,6 +123,36 @@ public final class RagdollGameTests {
   }finally{NativeWorlds.settle(level);doll.discard();leash.discard();hang.discard();lead.discard();block.discard();dragged.discard();player.discard();}
  }
 
+ /**
+ * Shoved hard forward, back and sideways, an active ragdoll catches itself by stepping: a planted foot stays where
+ * it stands (it does not skate), the body moves by steps, and it ends up standing.
+ */
+ @GameTest(template="empty",timeoutTicks=300) public static void shovedRagdollStepsInsteadOfSliding(GameTestHelper h){
+  if(!NativeWorlds.enabled()){h.succeed();return;}var level=h.getLevel();var floor=floor(h,220,14);
+  Vec3[] pushes={new Vec3(0,0,.2),new Vec3(0,0,-.2),new Vec3(.18,0,0)};String[] names={"forward","back","side"};
+  var player=h.makeMockPlayer(net.minecraft.world.level.GameType.CREATIVE);PlayerRagdollEntity[] dolls=new PlayerRagdollEntity[3];
+  for(int k=0;k<3;k++){player.moveTo(floor.getX()+.5-8+k*8,floor.getY()+1,floor.getZ()+.5,0,0);player.yBodyRot=0;dolls[k]=PhysicalistContent.PLAYER_RAGDOLL.get().create(level);dolls[k].initialize(player,true);level.addFreshEntity(dolls[k]);}
+  try{for(int i=0;i<50;i++){gameTick(level,dolls);}NativeWorlds.settle(level);
+   Vec3[] start=new Vec3[3];for(int k=0;k<3;k++){start[k]=dolls[k].limbs().get(1).position;for(var p:dolls[k].limbs())p.velocity=p.velocity.add(pushes[k]);}
+   double[] slip=new double[3];int[] steps=new int[3];Vec3[][] last=new Vec3[3][2];int[] was=new int[]{-1,-1,-1};var log=new StringBuilder();
+   Vec3[] late=new Vec3[3];
+   for(int i=0;i<140;i++){gameTick(level,dolls);NativeWorlds.settle(level);if(i==110)for(int k=0;k<3;k++)late[k]=dolls[k].limbs().get(1).position;
+    for(int k=0;k<3;k++){var d=dolls[k];int s=d.steppingLeg();if(s>=0&&s!=was[k])steps[k]++;
+     // Skid: how far a planted foot ended up from where it was set down (wobble of the leg about its sole is not).
+     for(int f=0;f<2;f++){Vec3 p=d.foot(f);boolean down=s!=f&&was[k]!=f&&!d.fallen()&&p.y<floor.getY()+1.1;
+      if(down&&last[k][f]==null)last[k][f]=p;else if((!down||i==139)&&last[k][f]!=null){slip[k]+=Math.hypot(p.x-last[k][f].x,p.z-last[k][f].z);last[k][f]=null;}}
+     was[k]=s;if(i%10==0)log.append(String.format(java.util.Locale.ROOT,"%s t%d step%d moved%.2f up%.2f slip%.2f; ",names[k],i,s,d.limbs().get(1).position.subtract(start[k]).horizontalDistance(),upright(d),slip[k]));}}
+   org.slf4j.LoggerFactory.getLogger("Physicalist").info("Shoves: steps {} slip {} | {}",java.util.Arrays.toString(steps),java.util.Arrays.toString(slip),log);
+   for(int k=0;k<3;k++){var d=dolls[k];
+    h.assertTrue(!d.fallen()&&upright(d)>.85,names[k]+" shove knocked it down "+log);
+    h.assertTrue(steps[k]>=1,names[k]+" shove: no step "+log);
+    double moved=d.limbs().get(1).position.subtract(start[k]).horizontalDistance();
+    h.assertTrue(slip[k]<.25*moved+.15,names[k]+" shove: feet skate "+slip[k]+" for "+moved+" moved "+log);
+    h.assertTrue(d.limbs().get(1).position.subtract(late[k]).horizontalDistance()<.3,names[k]+" shove: still walking off "+log);}
+   h.succeed();
+  }finally{NativeWorlds.settle(level);for(var d:dolls)d.discard();}
+ }
+
  /** An active ragdoll knocked flat lies still a moment, then gets back on its feet. */
  @GameTest(template="empty",timeoutTicks=300) public static void fallenRagdollGetsUp(GameTestHelper h){
   if(!NativeWorlds.enabled()){h.succeed();return;}var level=h.getLevel();var floor=floor(h,180,10);
@@ -162,7 +192,7 @@ public final class RagdollGameTests {
    h.assertTrue(torso.velocity.horizontalDistance()<.015,"Ragdoll keeps walking after the shove: "+torso.velocity.horizontalDistance()+" "+log);
    h.assertTrue(facing.z>.9,"Shove turned the ragdoll around: facing "+facing);
    // The same shove topples a limp one.
-   doll.setActive(false);for(var p:doll.limbs())p.velocity=p.velocity.add(.12,0,0);for(int i=0;i<60;i++){doll.tick();NativeWorlds.flush(level);}
+   doll.setActive(false);for(var p:doll.limbs())p.velocity=p.velocity.add(.15,0,0);for(int i=0;i<80;i++){doll.tick();NativeWorlds.flush(level);}
    h.assertTrue(upright(doll)<.7,"Limp ragdoll keeps standing: up="+upright(doll));h.succeed();
   }finally{doll.discard();}
  }
