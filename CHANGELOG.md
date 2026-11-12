@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.18.3 — No more sliding along half sitting
+
+- **Gives up instead of straining.** An active ragdoll leaning far back, sunk low (legs out in front, kneeling,
+  wedged against a wall) or sitting on the ground with its feet up for about a second now lets itself fall and gets
+  up properly. It used to slide along in that pose for ever, trying to straighten up. Sitting with its feet off the
+  ground no longer counts as "in the air" (where balance did nothing at all).
+- **Getting up finishes.** Slanted legs lift their feet to swing in under the hips (the feet grip since 0.18.1 and
+  stayed put, leaving it half risen on splayed legs and skating along); sideways motion is damped hard while rising;
+  it hands over to balance at its standing height with the rise stopped, instead of shooting up and falling again.
+
 ## 0.18.2 — Ragdolls step instead of skating
 
 - **Planted feet grip.** A foot that is set down holds its spot and the body's push goes into the ground through the

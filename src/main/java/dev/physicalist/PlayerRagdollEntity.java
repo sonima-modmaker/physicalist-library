@@ -109,7 +109,7 @@ public final class PlayerRagdollEntity extends Entity implements PhysicalistBody
   * Active ragdolls (upright ones: players, zombies, villagers...) lean against a push and step under their centre of
   * mass to stay on their feet; once tipped past recovery they go limp. Turning it off makes the ragdoll limp at once.
   */
- public void setActive(boolean value){active=value;fallen=false;stepLeg=-1;stepTicks=0;heading=Double.NaN;hold[0]=hold[1]=null;sleeping=false;quiet=0;}
+ public void setActive(boolean value){active=value;fallen=false;stepLeg=-1;stepTicks=0;heading=Double.NaN;hold[0]=hold[1]=null;struggle=0;sleeping=false;quiet=0;}
  private static final int STEP_TICKS=6;
  /** Ground spot each planted foot stands on, or null while it swings. */
  private final Vec3[] hold=new Vec3[2];
@@ -127,8 +127,21 @@ public final class PlayerRagdollEntity extends Entity implements PhysicalistBody
   Vec3[] foot=new Vec3[2];for(int k=0;k<2;k++){var leg=parts.get(4+k);foot[k]=leg.position.add(leg.vector(new Vec3(0,-leg.half.y,0)));}
   // In the air (thrown, held by the wand) there is nothing to balance on; it catches itself when it lands.
   boolean grounded=false;for(var f:foot)grounded|=level().getBlockCollisions(this,new AABB(f,f).inflate(.12,.1,.12)).iterator().hasNext();
-  if(!grounded){stepLeg=-1;stepTicks=0;hold[0]=hold[1]=null;return;}
-  Vec3 support=foot[0].add(foot[1]).scale(.5);double scale=rig.center[1].y/1.125,g=Math.max(1e-4,PhysicalistConfig.defaults().gravity());
+  double scale=rig.center[1].y/1.125;
+  if(!grounded){stepLeg=-1;stepTicks=0;hold[0]=hold[1]=null;
+   // Sitting or kneeling on the ground with its feet up is not flying: any part resting on the ground counts as
+   // stuck (below), not as "in the air". Thrown or held by the wand, nothing touches the ground.
+   boolean resting=false;for(var p:parts)resting|=level().getBlockCollisions(this,CompoundCollision.bounds(p.box()).move(0,-.12,0)).iterator().hasNext();
+   if(resting&&stuck(true))fallDown();
+   return;}
+  Vec3 support=foot[0].add(foot[1]).scale(.5);double g=Math.max(1e-4,PhysicalistConfig.defaults().gravity());
+  // Leaning far back or sunk low for over a second and a half (legs out in front, half sitting, wedged against a
+  // wall or a ledge) it gives up and falls, then gets up properly. It used to slide along in that pose for ever,
+  // straining to straighten up.
+  // Height is measured from the lowest point of the body, not the feet: sitting with its legs raised in front, the
+  // feet were up too and it did not look sunk at all.
+  double floorY=Double.MAX_VALUE;for(var p:parts)floorY=Math.min(floorY,CompoundCollision.bounds(p.box()).minY);
+  if(stuck(up.y<.85||floorY+rig.center[1].y-torso.position.y>.25*scale)){fallDown();return;}
   double height=Math.max(.3*scale,com.y-support.y);
   Vec3 capture=new Vec3(com.x+vel.x*Math.sqrt(height/g),support.y,com.z+vel.z*Math.sqrt(height/g));
   Vec3 offset=new Vec3(capture.x-support.x,0,capture.z-support.z);
@@ -210,7 +223,11 @@ public final class PlayerRagdollEntity extends Entity implements PhysicalistBody
    if(reach.lengthSqr()<1e-6)reach=new Vec3(0,-1,0);
    turnUp(arm,reach.normalize().scale(-1),(.5+.3*alarm)*strength);pivot(arm,torso,torso.position.add(torso.vector(rig.torsoAnchor[2+k])));}
  }
- private double alarm,getUpFrom,groundY;private int calm,downTicks,getUp,gathers;
+ private double alarm,getUpFrom,groundY;private int calm,downTicks,getUp,gathers,struggle;
+ /** Counts ticks spent in a bad pose (decaying while it is fine); true once it has lasted a second. */
+ private boolean stuck(boolean bad){struggle=bad?struggle+1:Math.max(0,struggle-2);return struggle>20;}
+ /** Gives up balancing: limp for a moment, then {@link #standUp} gets it back on its feet. */
+ private void fallDown(){fallen=true;struggle=0;stepLeg=-1;stepTicks=0;hold[0]=hold[1]=null;downTicks=10;getUp=0;alarm=0;}
  private static final int GET_UP_TICKS=40;
  /**
  * Getting up after a fall: once it has lain still for a moment, the ragdoll draws its legs under the hips, pushes off
@@ -230,19 +247,26 @@ public final class PlayerRagdollEntity extends Entity implements PhysicalistBody
   // The torso first turns upright, then rises: lifted while still lying flat it swung up like a plank.
   turnUp(torso,new Vec3(0,1,0),.55*strength);
   double tilt=Math.max(0,torso.vector(new Vec3(0,1,0)).y),height=getUpFrom+(goal-getUpFrom)*s*Math.max(.3,tilt);
-  double rise=Math.clamp((height-torso.position.y)*.4,-.04,.12);
-  for(int i=0;i<4;i++){var p=parts.get(i);p.velocity=new Vec3(p.velocity.x*.6,rise,p.velocity.z*.6);}
+  double rise=Math.clamp((height-torso.position.y)*.35,-.06,.1);
+  // Horizontal motion is damped hard: rising it is pushing up off the ground, and it used to skate along half risen.
+  for(int i=0;i<4;i++){var p=parts.get(i);p.velocity=new Vec3(p.velocity.x*.3,rise,p.velocity.z*.3);}
   Vec3 side=flat(torso.vector(new Vec3(1,0,0))),front=flat(torso.vector(new Vec3(0,0,1)));
   for(int k=0;k<2;k++){var leg=parts.get(4+k);Vec3 hip=torso.position.add(torso.vector(rig.torsoAnchor[4+k]));
    Vec3 foot=new Vec3(hip.x,groundY,hip.z);Vec3 d=hip.subtract(foot);if(d.lengthSqr()<1e-6)d=new Vec3(0,1,0);
-   turnUp(leg,d.normalize(),.6*strength);pivot(leg,torso,hip);}
+   turnUp(leg,d.normalize(),.6*strength);pivot(leg,torso,hip);
+   // A slanted leg lifts its foot to swing it in under the hips: dragged along the ground the foot held fast (it
+   // grips now) and the ragdoll stayed half risen on splayed legs.
+   double slant=Math.acos(Math.clamp(leg.vector(new Vec3(0,1,0)).y,-1,1));if(slant>.25)leg.velocity=leg.velocity.add(0,.05*scale,0);}
   // Arms push down against the ground beside the body while it rises, then come back to the sides.
   for(int k=0;k<2;k++){double sign=rig.torsoAnchor[2+k].x>0?1:-1;var arm=parts.get(2+k);
    Vec3 reach=new Vec3(0,-1,0).add(side.scale(sign*.35*(1-s))).add(front.scale(.25*(1-s)));
    turnUp(arm,reach.normalize().scale(-1),.5*strength);pivot(arm,torso,torso.position.add(torso.vector(rig.torsoAnchor[2+k])));}
   turnUp(parts.get(0),new Vec3(0,1,0),.3*strength);pivot(parts.get(0),torso,torso.position.add(torso.vector(rig.torsoAnchor[0])));
-  if(getUp>=GET_UP_TICKS&&torso.vector(new Vec3(0,1,0)).y>Math.cos(.35)&&torso.position.y>goal-.12*scale){
-   fallen=false;getUp=0;downTicks=0;stepLeg=-1;stepTicks=0;calm=0;heading=Double.NaN;alarm=0;
+  // Handed over only once it stands at its height and has stopped rising: handed over still rising it shot 0.2 above
+  // its standing height, dropped back with its legs not under it and fell again.
+  if(getUp>=GET_UP_TICKS&&torso.vector(new Vec3(0,1,0)).y>Math.cos(.35)&&torso.position.y>goal-.22*scale&&torso.position.y<goal+.08*scale&&Math.abs(torso.velocity.y)<.03){
+   for(var p:parts)p.velocity=new Vec3(p.velocity.x*.5,0,p.velocity.z*.5);
+   fallen=false;getUp=0;downTicks=0;stepLeg=-1;stepTicks=0;calm=0;heading=Double.NaN;alarm=0;struggle=0;
   }else if(getUp>GET_UP_TICKS*2+20){getUp=0;downTicks=0;}
  }
  /**
