@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.18.1 — Grip, ragdolls that get up, chains on any limb
+
+- **Friction.** The ground grips like rough stone (0.9, and at least that for every body) and ragdoll limbs grip
+  hard (1.0). A block thrown at 6 m/s slides 2 blocks (was 3.7), a ragdoll about 1.8 (was 2.3-3.9).
+- **Balance.** With both feet down, the legs push the hips back over the middle of the feet, so a shoved ragdoll
+  steps back (or forward) once or twice and stops: a backward shove now ends 0.7 blocks back instead of shuffling
+  off for 2+ blocks. A short pause between steps; the planted foot is no longer braked into a slide.
+- **Arms** are held firmly at the sides when calm and fly out only while it is really losing its balance, fading
+  back over about a second: no more ragdolls frozen in a balancing pose.
+- **Getting up.** An active ragdoll that fell lies still a moment, draws its legs under it, pushes off with its
+  arms and stands up in about two seconds, then balances again.
+- **Chains on any limb.** A chain hooks the limb it was attached to (head, torso, arm, leg). Ragdoll joints are now
+  plain impulse joints: hung by an arm or leg the old articulated skeleton turned to NaN within seconds, and pulling
+  one on a taut chain blew it apart. Now it hangs calmly at the chain's length and swings when pulled.
+
 ## 0.18.0 — Ragdolls that keep their balance, dressed mobs, a working wand
 
 - **Wand and punches fixed.** Since 0.17 the physics step runs on its own thread, and a wand drag or a punch made

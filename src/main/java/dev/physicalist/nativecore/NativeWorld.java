@@ -46,7 +46,7 @@ public final class NativeWorld implements AutoCloseable {
   final PlayerRagdollEntity entity;final int part;LimbSource(PlayerRagdollEntity e,int p){entity=e;part=p;}
   RigidBodyState body(){return entity.limbs().get(part);}public Entity owner(){return entity;}public int role(){return part;}public Vec3 position(){return body().position;}public Quaternionf rotation(){return new Quaternionf(body().orientation);}public Vec3 velocity(){return body().velocity;}public Vec3 angular(){return body().angular;}public double mass(){return 1/body().inverseMass;}public long revision(){return 0;}
   public AABB bounds(){return CompoundCollision.bounds(body().box());}
-  public double[] geometry(){Vec3 h=body().half;return new double[]{0,0,0,0,0,0,1,h.x,h.y,h.z,.6,0};}
+  public double[] geometry(){Vec3 h=body().half;return new double[]{0,0,0,0,0,0,1,h.x,h.y,h.z,1,0};}
   public void accept(Vec3 p,Quaternionf q,Vec3 v,Vec3 w,boolean sleeping){var b=body();b.position=p;b.orientation.set(q);b.velocity=v;b.angular=w;}
   public double waterDensity(){return PhysicalistConfig.WATER_RAGDOLL_DENSITY.get();}
  }
@@ -99,7 +99,7 @@ public final class NativeWorld implements AutoCloseable {
  /** Native collision owner of an entity, as passed to createBody0. */
  static long bits(Entity e){return e.getUUID().getLeastSignificantBits()|1;}
  /** Native body holding a jointed (rigid or ragdoll) chain end, or null for anchored ends. */
- private Binding endBinding(PhysicalChainEntity chain,int end){var p=chain.endpoint(end);if(!p.jointed())return null;Entity owner=p.entity(level);return owner==null?null:bindings.get(owner.getUUID()+(p.doll()?"/1":"/-1"));}
+ private Binding endBinding(PhysicalChainEntity chain,int end){var p=chain.endpoint(end);if(!p.jointed())return null;Entity owner=p.entity(level);return owner==null?null:bindings.get(owner.getUUID()+(p.doll()?"/"+p.part():"/-1"));}
  private static final class Binding{long id,revision=Long.MIN_VALUE,lastSeen,created;double mass;double[] geometry,last,sent;Source source;boolean paused,ignored;Vec3 before=Vec3.ZERO,beforeAngular=Vec3.ZERO,beforeCenter=Vec3.ZERO;Binding(Source source){this.source=source;}}
  private final ServerLevel level;public final long scene;private final TerrainCache terrain;private final ExternalLayer external;private final Map<String,Binding> bindings=new LinkedHashMap<>();private final Map<String,Source> pending=new LinkedHashMap<>();private final Map<UUID,long[]> rigs=new HashMap<>();private final Map<UUID,PlayerRagdollEntity> dolls=new LinkedHashMap<>();private long frame;private double lastMillis;private int sleeping;private int paused;
  NativeWorld(ServerLevel level){this.level=level;worker=worker(level);scene=NativeBridge.createScene0(9.81);terrain=new TerrainCache(level,scene);external=new ExternalLayer(scene);}
@@ -202,7 +202,9 @@ public final class NativeWorld implements AutoCloseable {
  }
  private void setupRigs(){for(var e:dolls.entrySet()){long[] ids=new long[6];boolean ready=true;for(int i=0;i<6;i++){Binding b=bindings.get(e.getKey()+"/"+i);if(b==null){ready=false;break;}ids[i]=b.id;}if(!ready||Arrays.equals(ids,rigs.get(e.getKey())))continue;
   // s[7]: twist about the limb's own axis, s[9]: swing cone. Twist equal to the cone let legs spin 95 degrees.
-  var rig=e.getValue().rig();for(int i=0;i<6;i++){if(i==1)continue;Vec3 a=rig.torsoAnchor()[i],b=rig.limbAnchor()[i];NativeBridge.joint0(scene,ids[1],ids[i],new double[]{0,a.x,a.y,a.z,b.x,b.y,b.z,rig.twist()[i],0,rig.swing()[i],0,0,0,1,0,1});}
+  // Impulse joints (s[15]=0), not an articulation: a chain hooked to an arm or leg (a child link) turned the whole
+  // ragdoll to NaN within seconds, and pulling one hung by the torso blew it apart.
+  var rig=e.getValue().rig();for(int i=0;i<6;i++){if(i==1)continue;Vec3 a=rig.torsoAnchor()[i],b=rig.limbAnchor()[i];NativeBridge.joint0(scene,ids[1],ids[i],new double[]{0,a.x,a.y,a.z,b.x,b.y,b.z,rig.twist()[i],0,rig.swing()[i],0,0,0,1,0,0});}
   rigs.put(e.getKey(),ids);
  }}
  public boolean simulates(Entity entity){for(var b:bindings.values())if(b.source.owner()==entity&&b.id!=0&&!b.paused&&b.lastSeen==frame)return true;return false;}

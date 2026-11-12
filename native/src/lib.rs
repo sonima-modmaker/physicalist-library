@@ -286,7 +286,10 @@ impl Scene {
                 (b[1] + b[4]) * 0.5,
                 (b[2] + b[5]) * 0.5,
             ))
-            .friction(0.6)
+            // Ground grips at least as well as rough stone (Max rule): with 0.6 averaged against a body's own
+            // 0.35, blocks and ragdolls skated several blocks along the ground as if on ice.
+            .friction(0.9)
+            .friction_combine_rule(CoefficientCombineRule::Max)
             .restitution(0.)
             .build();
             handles.push(self.world.insert_collider(c, None));
