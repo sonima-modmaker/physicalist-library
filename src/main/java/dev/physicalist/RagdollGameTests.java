@@ -238,7 +238,83 @@ public final class RagdollGameTests {
   }finally{doll.discard();}
  }
 
+ /**
+  * An active ragdoll sent to a point turns, walks there on its own legs and stops. It may stumble and fall once on the
+  * way (it gets up and walks on), not more.
+  */
+ @GameTest(template="empty",timeoutTicks=700) public static void ragdollWalksToGoal(GameTestHelper h){
+  if(!NativeWorlds.enabled()){h.succeed();return;}var level=h.getLevel();var floor=floor(h,210,14);
+  var player=h.makeMockPlayer(net.minecraft.world.level.GameType.CREATIVE);Vec3[] goals={new Vec3(0,0,7),new Vec3(6,0,-3)};String[] names={"ahead","behind-side"};
+  PlayerRagdollEntity[] dolls=new PlayerRagdollEntity[2];Vec3[] start=new Vec3[2];
+  for(int k=0;k<2;k++){player.moveTo(floor.getX()+.5-6+k*12,floor.getY()+1,floor.getZ()+.5-3,0,0);player.yBodyRot=0;dolls[k]=PhysicalistContent.PLAYER_RAGDOLL.get().create(level);dolls[k].initialize(player,true);level.addFreshEntity(dolls[k]);}
+  try{for(int i=0;i<30;i++)gameTick(level,dolls);NativeWorlds.settle(level);
+   for(int k=0;k<2;k++){start[k]=dolls[k].limbs().get(1).position;dolls[k].walkTo(start[k].add(goals[k]),.8,.05);}
+   int[] steps=new int[2],was={-1,-1},falls=new int[2];boolean[] fell=new boolean[2],arrived=new boolean[2];var log=new StringBuilder();
+   for(int i=0;i<580;i++){gameTick(level,dolls);NativeWorlds.settle(level);
+    for(int k=0;k<2;k++){var d=dolls[k];int s=d.steppingLeg();if(s>=0&&s!=was[k])steps[k]++;was[k]=s;if(d.fallen()&&!fell[k])falls[k]++;fell[k]=d.fallen();arrived[k]|=d.atGoal();
+     if(i%20==0){var t=d.limbs().get(1);Vec3 to=start[k].add(goals[k]).subtract(t.position);Vec3 f=t.vector(new Vec3(0,0,1));double facing=(f.x*to.x+f.z*to.z)/Math.max(1e-6,Math.hypot(f.x,f.z)*Math.hypot(to.x,to.z));
+      log.append(String.format(java.util.Locale.ROOT,"%s t%d left%.2f up%.2f steps%d fallen%s face%.2f v%.3f feet%.2f; ",names[k],i,to.horizontalDistance(),upright(d),steps[k],d.fallen(),facing,t.velocity.horizontalDistance(),d.foot(0).subtract(d.foot(1)).horizontalDistance()));}}}
+   org.slf4j.LoggerFactory.getLogger("Physicalist").info("Walk: {}",log);
+   for(int k=0;k<2;k++){var d=dolls[k];double left=d.limbs().get(1).position.subtract(start[k].add(goals[k])).horizontalDistance();
+    h.assertTrue(falls[k]<=1,names[k]+": fell "+falls[k]+" times walking "+log);
+    h.assertTrue(arrived[k],names[k]+": did not get there "+log);
+    h.assertTrue(left<1.4,names[k]+": walked off from the goal, "+left+" left "+log);
+    h.assertTrue(steps[k]>=6,names[k]+": slid instead of walking, "+steps[k]+" steps "+log);
+    h.assertTrue(upright(d)>.85&&d.atGoal(),names[k]+": not standing still at the goal "+log);}
+   h.succeed();
+  }finally{NativeWorlds.settle(level);for(var d:dolls)d.discard();}
+ }
+
+ /** A dirt block thrown at an active ragdoll makes it stagger (and the block bounces off); a whole stack floors it. */
+ @GameTest(template="empty",timeoutTicks=300) public static void thrownBlocksKnockRagdolls(GameTestHelper h){
+  if(!NativeWorlds.enabled()){h.succeed();return;}var level=h.getLevel();var floor=floor(h,260,12);
+  var player=h.makeMockPlayer(net.minecraft.world.level.GameType.CREATIVE);PlayerRagdollEntity[] dolls=new PlayerRagdollEntity[2];int[] counts={1,64};
+  for(int k=0;k<2;k++){player.moveTo(floor.getX()+.5-4+k*8,floor.getY()+1,floor.getZ()+.5,0,0);player.yBodyRot=0;dolls[k]=PhysicalistContent.PLAYER_RAGDOLL.get().create(level);dolls[k].initialize(player,true);level.addFreshEntity(dolls[k]);}
+  var items=new net.minecraft.world.entity.item.ItemEntity[2];
+  try{for(int i=0;i<30;i++)gameTick(level,dolls);NativeWorlds.settle(level);
+   Vec3[] start=new Vec3[2];
+   for(int k=0;k<2;k++){start[k]=dolls[k].limbs().get(1).position;Vec3 at=start[k].add(0,.1,2.2);
+    items[k]=new net.minecraft.world.entity.item.ItemEntity(level,at.x,at.y,at.z,new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.DIRT,counts[k]),0,.02,-.45);items[k].setPickUpDelay(40);level.addFreshEntity(items[k]);}
+   double[] speed=new double[2];boolean[] fell=new boolean[2];boolean[] bounced=new boolean[2];var log=new StringBuilder();
+   for(int i=0;i<120;i++){NativeWorlds.settle(level);for(var it:items)if(it.isAlive())it.tick();for(var d:dolls)d.tick();NativeWorlds.launch(level);NativeWorlds.settle(level);
+    for(int k=0;k<2;k++){var d=dolls[k];speed[k]=Math.max(speed[k],d.limbs().get(1).velocity.horizontalDistance());fell[k]|=d.fallen();bounced[k]|=items[k].getDeltaMovement().z>0;
+     if(i%10==0)log.append(String.format(java.util.Locale.ROOT,"x%d t%d speed%.3f up%.2f fallen%s item%.2f; ",counts[k],i,d.limbs().get(1).velocity.horizontalDistance(),upright(d),d.fallen(),items[k].getZ()-start[k].z));}}
+   org.slf4j.LoggerFactory.getLogger("Physicalist").info("Thrown: {}",log);
+   h.assertTrue(bounced[0]&&bounced[1],"Thrown items flew through "+log);
+   h.assertTrue(speed[0]>.04,"One block did not make it stagger "+log);
+   h.assertTrue(!fell[0],"One block knocked it over "+log);
+   h.assertTrue(fell[1],"A whole stack did not knock it over "+log);
+   h.succeed();
+  }finally{NativeWorlds.settle(level);for(var d:dolls)d.discard();for(var it:items)if(it!=null)it.discard();}
+ }
+
  private static double upright(PlayerRagdollEntity doll){return doll.limbs().get(1).vector(new Vec3(0,1,0)).y;}
+
+ /**
+  * Punched by a player (in the head, in the chest from the side, three times in a row) an active ragdoll staggers and
+  * steps but stays on its feet; so it does after one heavy sword-like blow.
+  */
+ @GameTest(template="empty",timeoutTicks=400) public static void punchesDoNotFloorIt(GameTestHelper h){
+  if(!NativeWorlds.enabled()){h.succeed();return;}var level=h.getLevel();var floor=floor(h,280,14);
+  var player=h.makeMockPlayer(net.minecraft.world.level.GameType.CREATIVE);String[] names={"head x3","chest-side x3","heavy"};int[] part={0,1,1};float[] damage={1,1,7};int[] hits={3,3,1};
+  Vec3[] from={new Vec3(0,0,-2.5),new Vec3(2.5,0,0),new Vec3(0,0,-2.5)};
+  PlayerRagdollEntity[] dolls=new PlayerRagdollEntity[3];
+  for(int k=0;k<3;k++){player.moveTo(floor.getX()+.5-8+k*8,floor.getY()+1,floor.getZ()+.5,0,0);player.yBodyRot=0;dolls[k]=PhysicalistContent.PLAYER_RAGDOLL.get().create(level);dolls[k].initialize(player,true);level.addFreshEntity(dolls[k]);}
+  try{for(int i=0;i<30;i++)gameTick(level,dolls);NativeWorlds.settle(level);
+   boolean[] fell=new boolean[3];double[] speed=new double[3];var log=new StringBuilder();
+   for(int i=0;i<300;i++){
+    for(int k=0;k<3;k++)if(i%30==0&&i/30<hits[k]){var d=dolls[k];Vec3 aim=d.limbs().get(part[k]).position,at=d.limbs().get(1).position.add(from[k]);
+     player.moveTo(at.x,floor.getY()+1,at.z,0,0);Vec3 eye=player.getEyePosition(),dir=aim.subtract(eye);
+     player.moveTo(at.x,floor.getY()+1,at.z,(float)Math.toDegrees(Math.atan2(-dir.x,dir.z)),(float)-Math.toDegrees(Math.asin(dir.y/dir.length())));
+     d.hurt(level.damageSources().playerAttack(player),damage[k]);}
+    gameTick(level,dolls);NativeWorlds.settle(level);
+    for(int k=0;k<3;k++){var d=dolls[k];fell[k]|=d.fallen();speed[k]=Math.max(speed[k],d.limbs().get(1).velocity.horizontalDistance());
+     if(i%10==0)log.append(String.format(java.util.Locale.ROOT,"%s t%d up%.2f v%.3f step%d fallen%s; ",names[k],i,upright(d),d.limbs().get(1).velocity.horizontalDistance(),d.steppingLeg(),d.fallen()));}}
+   org.slf4j.LoggerFactory.getLogger("Physicalist").info("Punches: {}",log);
+   for(int k=0;k<3;k++){h.assertTrue(!fell[k],names[k]+": knocked it over "+log);h.assertTrue(speed[k]>.02,names[k]+": did not even stagger "+log);}
+   h.succeed();
+  }finally{NativeWorlds.settle(level);for(var d:dolls)d.discard();}
+ }
 
  /** An active ragdoll stands, takes a shove by stepping back, and stays on its feet. */
  @GameTest(template="empty",timeoutTicks=200) public static void activeRagdollKeepsBalance(GameTestHelper h){
@@ -262,6 +338,32 @@ public final class RagdollGameTests {
    doll.setActive(false);for(var p:doll.limbs())p.velocity=p.velocity.add(.15,0,0);for(int i=0;i<80;i++){doll.tick();NativeWorlds.flush(level);}
    h.assertTrue(upright(doll)<.7,"Limp ragdoll keeps standing: up="+upright(doll));h.succeed();
   }finally{doll.discard();}
+ }
+
+ /**
+  * After a shove an active ragdoll catches itself and then stands still, upright, over its feet: no endless small
+  * steps creeping it across the floor.
+  */
+ @GameTest(template="empty",timeoutTicks=600) public static void standsStillAfterShove(GameTestHelper h){
+  if(!NativeWorlds.enabled()){h.succeed();return;}var level=h.getLevel();var floor=floor(h,270,12);
+  var player=h.makeMockPlayer(net.minecraft.world.level.GameType.CREATIVE);Vec3[] pushes={new Vec3(0,0,.15),new Vec3(.12,0,0),new Vec3(0,0,-.15)};
+  PlayerRagdollEntity[] dolls=new PlayerRagdollEntity[3];
+  for(int k=0;k<3;k++){player.moveTo(floor.getX()+.5-6+k*6,floor.getY()+1,floor.getZ()+.5,0,0);player.yBodyRot=0;dolls[k]=PhysicalistContent.PLAYER_RAGDOLL.get().create(level);dolls[k].initialize(player,true);level.addFreshEntity(dolls[k]);}
+  try{for(int i=0;i<30;i++)gameTick(level,dolls);NativeWorlds.settle(level);
+   for(int k=0;k<3;k++)for(var p:dolls[k].limbs())p.velocity=p.velocity.add(pushes[k]);
+   Vec3[] mid=new Vec3[3];int[] late=new int[3],was={-1,-1,-1};double[] tilt=new double[3];var log=new StringBuilder();
+   for(int i=0;i<450;i++){gameTick(level,dolls);NativeWorlds.settle(level);
+    for(int k=0;k<3;k++){var d=dolls[k];if(i==200)mid[k]=d.limbs().get(1).position;int s=d.steppingLeg();if(i>200&&s>=0&&s!=was[k])late[k]++;was[k]=s;if(i>200)tilt[k]=Math.max(tilt[k],1-upright(d));
+     if(i%50==0)log.append(String.format(java.util.Locale.ROOT,"d%d t%d up%.2f v%.3f fallen%s; ",k,i,upright(d),d.limbs().get(1).velocity.horizontalDistance(),d.fallen()));}}
+   org.slf4j.LoggerFactory.getLogger("Physicalist").info("Stand: late steps {} | {}",java.util.Arrays.toString(late),log);
+   for(int k=0;k<3;k++){var d=dolls[k];double drift=d.limbs().get(1).position.subtract(mid[k]).horizontalDistance();
+    h.assertTrue(!d.fallen(),"d"+k+" fell "+log);
+    h.assertTrue(drift<.25&&late[k]<=2,"d"+k+" keeps creeping: "+drift+" in "+late[k]+" steps "+log);
+    h.assertTrue(tilt[k]<.03,"d"+k+" stands bent: "+tilt[k]+" "+log);
+    // Calm again, the arms hang down at its sides (not held out in front, stuck on a wrung shoulder).
+    for(int a=2;a<4;a++){double hang=d.limbs().get(a).vector(new Vec3(0,1,0)).y;h.assertTrue(hang>.9,"d"+k+" arm "+a+" is not hanging down: "+hang+" "+log);}}
+   h.succeed();
+  }finally{NativeWorlds.settle(level);for(var d:dolls)d.discard();}
  }
 
  /** With ragdolls on death, a killed mob leaves a ragdoll and is no longer drawn. */

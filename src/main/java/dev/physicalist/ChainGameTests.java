@@ -22,6 +22,23 @@ public final class ChainGameTests {
    h.assertTrue(restored.links().size()==chain.links().size()&&restored.cut(0)&&restored.cut(chain.links().size()),"Chain save lost geometry or cuts");restored.discard();h.succeed();
   }finally{chain.discard();}
  }
+ /** The wand takes hold of the link it points at: that link follows the wand and the rest of the chain hangs from it. */
+ @GameTest(template="empty") public static void wandHoldsTheLinkItGrabbed(GameTestHelper h){
+  var level=h.getLevel();Vec3 a=h.absolutePos(new BlockPos(1,160,1)).getCenter(),b=a.add(4,0,0);
+  for(int x=-1;x<=1;x++)for(int z=-1;z<=1;z++)level.getChunk(((int)a.x>>4)+x,((int)a.z>>4)+z);
+  var chain=PhysicalistContent.PHYSICAL_CHAIN.get().create(level);chain.initialize(ChainEndpoint.world(a),ChainEndpoint.world(b));level.addFreshEntity(chain);
+  try{for(int i=0;i<60;i++){chain.tick();NativeWorlds.flush(level);}
+   int pick=chain.links().size()/4;Vec3 at=chain.links().get(pick).position;var player=h.makeMockPlayer(net.minecraft.world.level.GameType.CREATIVE);player.setPos(at.add(0,-1,-3));
+   Vec3 aim=at.subtract(player.getEyePosition()).normalize();player.setYRot((float)Math.toDegrees(Math.atan2(-aim.x,aim.z)));player.setXRot((float)-Math.toDegrees(Math.asin(aim.y)));
+   h.assertTrue(chain.nearestLink(player,64)==pick,"Aimed at the wrong link: "+chain.nearestLink(player,64)+" not "+pick);
+   Vec3 goal=at.add(0,1.2,-.5);for(int i=0;i<60;i++){chain.physicalistDrag(player,goal);chain.tick();NativeWorlds.flush(level);}
+   var held=chain.links().get(pick);h.assertTrue(held.position.distanceTo(goal)<.6,"Held link did not follow the wand: "+held.position.distanceTo(goal));
+   var tail=chain.links().get(chain.links().size()-1);h.assertTrue(tail.point(new Vec3(0,tail.half.y,0)).distanceTo(b)<.2,"The far end was dragged off its anchor");
+   int mid=(pick+chain.links().size())/2;h.assertTrue(chain.links().get(mid).position.y<goal.y-.3,"The rest of the chain moved stiffly with the held link");
+   h.succeed();
+  }finally{chain.discard();}
+ }
+
  @GameTest(template="empty") public static void chainCanSuspendSharedPhysicalBody(GameTestHelper h){
   if(!NativeWorlds.enabled()){h.succeed();return;}var level=h.getLevel();var pos=h.absolutePos(new BlockPos(1,150,1));
   for(int x=-1;x<=1;x++)for(int z=-1;z<=1;z++)level.getChunk((pos.getX()>>4)+x,(pos.getZ()>>4)+z);

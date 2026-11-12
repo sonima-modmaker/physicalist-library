@@ -123,7 +123,8 @@ public final class PhysicalChainEntity extends Entity implements PhysicalistBody
  }
  private void refresh(){if(links.isEmpty())return;setPos(links.get(0).position);AABB bounds=CompoundCollision.bounds(links.get(0).box());for(var p:links)bounds=bounds.minmax(CompoundCollision.bounds(p.box()));setBoundingBox(bounds.inflate(.08));}
  public boolean cutAt(int joint){if(joint<0||joint>links.size()||cuts.get(joint))return false;cuts.set(joint);revision++;ChainSableBridge.close(sableRope);sableRope=null;publish();return true;}
- public int nearestLink(Player player){Vec3 eye=player.getEyePosition(),end=eye.add(player.getLookAngle().scale(6));double best=Double.POSITIVE_INFINITY;int nearest=-1;for(int i=0;i<links.size();i++){double hit=PhysicalistTargeting.rayFraction(links.get(i).box(),eye,end);if(hit<best){best=hit;nearest=i;}}return nearest;}
+ public int nearestLink(Player player){return nearestLink(player,6);}
+ public int nearestLink(Player player,double reach){Vec3 eye=player.getEyePosition(),end=eye.add(player.getLookAngle().scale(reach));double best=Double.POSITIVE_INFINITY;int nearest=-1;for(int i=0;i<links.size();i++){double hit=PhysicalistTargeting.rayFraction(links.get(i).box(),eye,end);if(hit<best){best=hit;nearest=i;}}return nearest;}
 
  // Client poses come from the link buffer; vanilla move packets would shrink the box to one link.
  @Override public void lerpTo(double x,double y,double z,float yaw,float pitch,int steps){if(!level().isClientSide||links.isEmpty())super.lerpTo(x,y,z,yaw,pitch,steps);}
@@ -148,7 +149,15 @@ public final class PhysicalChainEntity extends Entity implements PhysicalistBody
  public boolean attachedTo(java.util.UUID id){return first!=null&&first.data.hasUUID("Entity")&&first.data.getUUID("Entity").equals(id)||last!=null&&last.data.hasUUID("Entity")&&last.data.getUUID("Entity").equals(id);}
  public void pushAt(Vec3 point,Vec3 velocity){if(links.isEmpty())return;RigidBodyState nearest=links.get(0);for(var link:links)if(link.position.distanceToSqr(point)<nearest.position.distanceToSqr(point))nearest=link;nearest.impulse(velocity.scale(1/nearest.inverseMass),point);}
  @Override public PhysicsBody physicalistBody(){return adapter;}
- @Override public void physicalistDrag(Player player,Vec3 goal){if(links.isEmpty())return;int hit=nearestLink(player);var held=links.get(hit<0?0:hit);Vec3 change=GrabController.velocity(goal.subtract(held.position),held.velocity,PhysicalistConfig.defaults().gravity()).subtract(held.velocity);for(var p:links)p.velocity=p.velocity.add(change);}
+ /**
+  * The wand holds the link it was pointed at when the grab began (by the hand, as it were): only that link is drawn
+  * to the wand and the rest of the chain hangs from it. It used to look for a link again every tick (and took the
+  * first one when the look missed) and moved the whole chain stiffly along with it.
+  */
+ @Override public void physicalistDrag(Player player,Vec3 goal){if(links.isEmpty())return;long now=level().getGameTime();
+  var grip=grips.get(player.getUUID());if(grip==null||grip[1]<now-2||grip[0]>=links.size()){int hit=nearestLink(player,64);if(hit<0){double best=Double.MAX_VALUE;for(int i=0;i<links.size();i++){double d=links.get(i).position.distanceToSqr(goal);if(d<best){best=d;hit=i;}}}grip=new long[]{hit,now};grips.put(player.getUUID(),grip);}
+  grip[1]=now;var held=links.get((int)grip[0]);held.velocity=GrabController.velocity(goal.subtract(held.position),held.velocity,PhysicalistConfig.defaults().gravity());held.angular=held.angular.scale(.5);}
+ private final java.util.Map<java.util.UUID,long[]> grips=new java.util.HashMap<>();
  private void fallback(){
   // The same library's rigid-body/XPBD primitives keep chains usable without JNI.
   var anchors=List.of(new RigidBodyState(a,new Vec3(.01,.01,.01),0),new RigidBodyState(b,new Vec3(.01,.01,.01),0));

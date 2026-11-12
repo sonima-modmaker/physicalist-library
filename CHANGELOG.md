@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.19.0 — Walking bots, real get-ups, a wand that holds chains
+
+- **Walking ragdolls and bots.** `/physicalist ragdoll bots [count]` spawns up to 16 "Bot" ragdolls around you that
+  walk after you on their own legs, stop at arm's length and face you. Mods can send any active ragdoll walking with
+  `PlayerRagdollEntity.walkTo(goal, stopDistance, speed)`.
+- **Blows rock it, they don't floor it.** A punch moves a standing ragdoll about as much as it moves a person: it
+  steps back along the blow instead of bending over at the waist, and three punches in a row or one heavy blow leave
+  it on its feet. Thrown blocks hit too: one makes it stagger, a whole stack knocks it down.
+- **Back to its normal stance.** After a stumble it draws its feet under its hips with real steps and straightens up:
+  arms down at its sides, nothing left twisted. Arms no longer get stuck held out in front on a wrung shoulder, and it
+  no longer dances on the spot with its arms out.
+- **Falls and gets up like a person.** Falling, it throws its arms out to catch itself. Getting up it sits up first
+  (or, face down, pushes up into a crouch on its hands) and rises from there, driven by limited muscle force, so it
+  carries its weight and sways instead of gliding up like an animation. Afterwards it settles into its stance.
+- **Wand holds the link you point at.** Grabbing a chain with the wand takes hold of that link; the rest of the chain
+  hangs from it. It used to drag the whole chain along stiffly (or the first link when the look missed).
+- **Site:** the logo is no longer stretched.
+
 ## 0.18.3 — No more sliding along half sitting
 
 - **Gives up instead of straining.** An active ragdoll leaning far back, sunk low (legs out in front, kneeling,

@@ -45,6 +45,10 @@ public final class PhysicalistCommands {
                                         .executes(ctx -> ragdollOf(ctx.getSource(),net.minecraft.commands.arguments.EntityArgument.getEntities(ctx,"targets"),false))
                                         .then(Commands.literal("active")
                                                 .executes(ctx -> ragdollOf(ctx.getSource(),net.minecraft.commands.arguments.EntityArgument.getEntities(ctx,"targets"),true)))))
+                        .then(Commands.literal("bots")
+                                .executes(ctx -> bots(ctx.getSource(),5))
+                                .then(Commands.argument("count", IntegerArgumentType.integer(1,16))
+                                        .executes(ctx -> bots(ctx.getSource(),IntegerArgumentType.getInteger(ctx,"count")))))
                         .then(Commands.literal("balance")
                                 .then(Commands.argument("targets", net.minecraft.commands.arguments.EntityArgument.entities())
                                         .then(Commands.argument("on", com.mojang.brigadier.arguments.BoolArgumentType.bool())
@@ -93,6 +97,26 @@ public final class PhysicalistCommands {
         entity.setActive(active);
         if(!level.addFreshEntity(entity))return failure(source,"Cannot spawn ragdoll");
         source.sendSuccess(()->Component.literal("Spawned "+(active?"active ":"")+"ragdoll of "+player.getGameProfile().getName()+" #"+entity.getId()+" (player is unaffected)"),true);return 1;
+    }
+    /** Test bots: active ragdolls named "Bot" in a ring around the source that walk after the nearest player. */
+    private static int bots(CommandSourceStack source,int count){
+        var level=source.getLevel();Vec3 at=source.getPosition();
+        int room=32-level.getEntitiesOfClass(PlayerRagdollEntity.class,new net.minecraft.world.phys.AABB(at,at).inflate(128)).size();
+        if(room<=0)return failure(source,"At most 32 nearby test ragdolls; delete old dummies first");
+        int made=0;var random=level.getRandom();
+        for(int i=0;i<Math.min(count,room);i++){
+            double angle=(i+random.nextDouble()*.5)*2*Math.PI/count,dist=3+random.nextDouble()*2.5;
+            double x=at.x+Math.sin(angle)*dist,z=at.z+Math.cos(angle)*dist;
+            // Stand it on the ground under that spot (or on top of whatever is there).
+            var pos=net.minecraft.core.BlockPos.containing(x,at.y+3,z);int down=0;
+            while(down<8&&level.getBlockState(pos.below()).getCollisionShape(level,pos.below()).isEmpty()){pos=pos.below();down++;}
+            while(!level.getBlockState(pos).getCollisionShape(level,pos).isEmpty()&&pos.getY()<at.y+6)pos=pos.above();
+            double floor=pos.getY();var shape=level.getBlockState(pos.below()).getCollisionShape(level,pos.below());if(!shape.isEmpty())floor=pos.getY()-1+shape.max(net.minecraft.core.Direction.Axis.Y);
+            var entity=PhysicalistContent.PLAYER_RAGDOLL.get().create(level);if(entity==null)break;
+            float yaw=(float)Math.toDegrees(Math.atan2(x-at.x,at.z-z));
+            entity.initializeBot(new Vec3(x,floor,z),yaw);if(level.addFreshEntity(entity))made++;
+        }
+        int total=made;source.sendSuccess(()->Component.literal("Spawned "+total+" bot"+(total==1?"":"s")+": they walk after the nearest player; throw things at them"),true);return total;
     }
     private static int balance(CommandSourceStack source,java.util.Collection<? extends Entity> targets,boolean on){
         int changed=0;for(Entity target:targets)if(target instanceof PlayerRagdollEntity doll){doll.setActive(on);changed++;}
