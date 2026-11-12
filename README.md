@@ -1,4 +1,9 @@
+<p align="center"><img src="site/logo.png" alt="Physicalist logo" width="256" height="256"></p>
+
 # Physicalist
+
+**0.18.3: ragdolls that keep their balance.** Active ragdolls step to catch themselves and get back up after a fall.
+Chains hook onto any limb. Everything physical has friction. See the [changelog](CHANGELOG.md).
 
 **0.16.4: soft bodies (experimental).** Deformable cars and planes simulated by a native solver on its own thread:
 bodies crumple, doors swing on hinges, planes fly with a blade-element propeller, control surfaces and springy wings

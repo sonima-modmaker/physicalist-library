@@ -35,6 +35,7 @@ displayName="${mod_name}" #mandatory
 displayURL="https://github.com/sonima-modmaker/physicalist-library"
 
 # A file name (in the root of the mod JAR) containing a logo for display
+logoFile="physicalist_logo.png"
 
 # A text field displayed in the mod UI
 #credits="" #optional

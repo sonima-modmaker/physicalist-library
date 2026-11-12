@@ -712,11 +712,11 @@ function drawSky() {
   const hz = horizon();
   if (!sky || sky.h !== H) {
     sky = ctx.createLinearGradient(0, 0, 0, H);
-    sky.addColorStop(0, '#0b1026');
-    sky.addColorStop(0.42, '#2a2a5e');
-    sky.addColorStop(0.72, '#7a3f6b');
-    sky.addColorStop(0.9, '#e9785a');
-    sky.addColorStop(1, '#ffbe7a');
+    sky.addColorStop(0, '#000000');
+    sky.addColorStop(0.42, '#08080a');
+    sky.addColorStop(0.72, '#18181c');
+    sky.addColorStop(0.9, '#33333a');
+    sky.addColorStop(1, '#55555c');
     sky.h = H;
   }
   ctx.save();
@@ -725,23 +725,22 @@ function drawSky() {
   ctx.fillStyle = sky;
   ctx.fillRect(0, -H * 3, W, H * 4);
   ctx.restore();
-  ctx.fillStyle = '#0b1026';
   const px = Math.max(2, Math.round(W / 480));
   for (const star of stars) {
     const tw = 0.55 + 0.45 * Math.sin(clock * 1.7 + star.t * 5);
-    ctx.fillStyle = `rgba(255,248,230,${0.75 * tw})`;
+    ctx.fillStyle = `rgba(255,255,255,${0.75 * tw})`;
     ctx.fillRect(Math.round(star.x * W), Math.round(star.y * hz), star.s * px, star.s * px);
   }
   const sunX = W * 0.74 - (camera.x - FIELD / 2) * scale() * 0.05, sunY = hz * 0.78;
   const halo = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, W * 0.35);
-  halo.addColorStop(0, 'rgba(255,214,140,0.55)');
-  halo.addColorStop(1, 'rgba(255,214,140,0)');
+  halo.addColorStop(0, 'rgba(255,255,255,0.28)');
+  halo.addColorStop(1, 'rgba(255,255,255,0)');
   ctx.fillStyle = halo;
   ctx.fillRect(0, 0, W, hz);
   const sun = Math.round(Math.min(W, H) * 0.09 / px) * px;
-  ctx.fillStyle = '#ffe2a0';
+  ctx.fillStyle = '#d8d8dc';
   ctx.fillRect(Math.round(sunX - sun / 2), Math.round(sunY - sun / 2), sun, sun);
-  ctx.fillStyle = '#fff3cf';
+  ctx.fillStyle = '#ffffff';
   ctx.fillRect(Math.round(sunX - sun / 2 + px * 2), Math.round(sunY - sun / 2 + px * 2), sun - px * 4, sun - px * 4);
 }
 
@@ -754,7 +753,7 @@ function drawClouds(dt) {
     const x0 = Math.round((c.x * W - (camera.x - FIELD / 2) * scale() * 0.1 * c.depth) / block) * block;
     const y0 = Math.round(c.y * hz / block) * block;
     const r = seeded(c.seed);
-    ctx.fillStyle = `rgba(255,214,200,${0.18 + 0.2 * c.depth})`;
+    ctx.fillStyle = `rgba(220,220,226,${0.1 + 0.14 * c.depth})`;
     for (let i = 0; i < c.w; i++) {
       const h = 1 + Math.floor(r() * 2);
       ctx.fillRect(x0 + i * block * 1.5, y0 - (h - 1) * block, block * 1.5, h * block);
@@ -763,7 +762,7 @@ function drawClouds(dt) {
 }
 
 function drawHills() {
-  const colors = ['#3a2d5c', '#2c2448', '#211b37'];
+  const colors = ['#2a2a2f', '#1c1c20', '#111114'];
   const parallax = [0.08, 0.18, 0.32];
   const heights = [0.32, 0.24, 0.16];
   const gy = horizon();
@@ -806,8 +805,8 @@ function drawTerrain() {
   // Night falls over the ground with depth.
   const [, gy] = toScreen(0, 0);
   const fade = ctx.createLinearGradient(0, gy, 0, gy + terrain.depth * s);
-  fade.addColorStop(0, 'rgba(12,10,24,0.1)');
-  fade.addColorStop(1, 'rgba(12,10,24,0.7)');
+  fade.addColorStop(0, 'rgba(0,0,0,0.25)');
+  fade.addColorStop(1, 'rgba(0,0,0,0.8)');
   ctx.fillStyle = fade;
   ctx.fillRect(0, gy, W, Math.max(0, H - gy));
 }

@@ -3,13 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0b1026">
+  <meta name="theme-color" content="#000000">
   <meta name="description" content="Physicalist is a physics mod and Java API for Minecraft 1.21.1 on NeoForge: rigid block bodies, chains, ragdolls, water, smoke and experimental soft bodies.">
   <meta property="og:title" content="Physicalist — real physics for Minecraft">
   <meta property="og:description" content="Fire rockets, topple a fort, and see what the mod brings to Minecraft 1.21.1.">
   <meta property="og:type" content="website">
+  <meta property="og:image" content="https://sonima-modmaker.github.io/physicalist-library/og.png">
+  <meta name="twitter:card" content="summary_large_image">
   <title>Physicalist — real physics for Minecraft</title>
-  <link rel="icon" type="image/svg+xml" href="./favicon.svg">
+  <link rel="icon" type="image/png" href="./favicon.png">
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png">
   <link rel="preload" href="./fonts/Monocraft.ttf" as="font" type="font/ttf" crossorigin>
   <link rel="stylesheet" href="./styles.css">
   <script type="module" src="./playground.js"></script>
@@ -19,7 +22,7 @@
 
   <header class="site-header">
     <a class="brand" href="#top" aria-label="Physicalist home">
-      <svg class="brand-mark" viewBox="0 0 8 8" aria-hidden="true"><path d="M3 0h2v1h1v1h1v1h1v2H7v1H6v1H5v1H3V7H2V6H1V5H0V3h1V2h1V1h1z" fill="#6fc04f"/><path d="M3 2h2v1h1v2H5v1H3V5H2V3h1z" fill="#ffe2a0"/></svg>
+      <img class="brand-mark" src="./logo.png" alt="" width="32" height="32">
       Physicalist
     </a>
     <nav aria-label="Main">
@@ -32,14 +35,17 @@
 
   <main id="main">
     <section class="hero" id="top" aria-labelledby="hero-title">
+      <div class="hero-top">
       <div class="hero-copy">
-        <p class="eyebrow"><span class="dot" aria-hidden="true"></span> Minecraft 1.21.1 · NeoForge · v0.16.4</p>
+        <p class="eyebrow"><span class="dot" aria-hidden="true"></span> Minecraft 1.21.1 · NeoForge · v0.18.3</p>
         <h1 id="hero-title">Physicalist</h1>
         <p class="lede">Real physics for Minecraft. Blocks with weight, chains, ragdolls, water, smoke — and vehicles that bend when they crash.</p>
         <div class="actions">
-          <a class="btn btn-primary" href="https://github.com/sonima-modmaker/physicalist-library/releases/download/v0.16.4/physicalist_library-0.16.4.jar">Download 0.16.4</a>
+          <a class="btn btn-primary" href="https://github.com/sonima-modmaker/physicalist-library/releases">Download</a>
           <a class="btn" href="#features">What's inside</a>
         </div>
+      </div>
+      <img class="hero-art" src="./logo.png" alt="Physicalist logo: a blocky figure walking with a chain on its wrist" width="512" height="512">
       </div>
 
       <div class="sandbox">
@@ -92,7 +98,7 @@
         <article class="feature">
           <svg viewBox="0 0 8 8" aria-hidden="true"><path d="M1 0h2v1h1v2H3v1H1V3H0V1h1zM5 4h2v1h1v2H7v1H5V7H4V5h1z" fill="#c9ccd0"/><path d="M3 3h2v2H3z" fill="#7b8794"/></svg>
           <h3>Chains and ragdolls</h3>
-          <p>Articulated chains in a shared native scene, and players that go limp and tumble as ragdolls.</p>
+          <p>Chains you can hook to any limb, and ragdolls that keep their balance: they step to catch themselves, and get back up when they fall.</p>
         </article>
         <article class="feature">
           <svg viewBox="0 0 8 8" aria-hidden="true"><path d="M0 4h8v4H0z" fill="#3f76e4"/><path d="M0 4h2v1H0zM4 4h2v1H4z" fill="#7aa5f0"/><path d="M2 1h4v3H2z" fill="#b98a52"/></svg>
@@ -152,7 +158,7 @@
         <h2 id="install-title">Install in a minute</h2>
       </div>
       <ol class="steps">
-        <li><strong>Download</strong> <span>the 0.16.4 JAR from GitHub releases.</span></li>
+        <li><strong>Download</strong> <span>the latest JAR from GitHub releases.</span></li>
         <li><strong>Drop it in</strong> <span>your instance's <code>mods</code> folder — one copy only.</span></li>
         <li><strong>Launch</strong> <span>Minecraft 1.21.1 with NeoForge and open the creative tab.</span></li>
       </ol>
@@ -164,7 +170,7 @@
           <div><dt>Soft bodies</dt><dd>Off by default: <code>experimental.softBodies</code></dd></div>
         </dl>
         <div class="install-actions">
-          <a class="btn btn-primary" href="https://github.com/sonima-modmaker/physicalist-library/releases/download/v0.16.4/physicalist_library-0.16.4.jar">Download 0.16.4</a>
+          <a class="btn btn-primary" href="https://github.com/sonima-modmaker/physicalist-library/releases">Download</a>
           <a class="btn" href="https://github.com/sonima-modmaker/physicalist-library/blob/main/docs/INSTALL.md">Install guide</a>
           <a class="btn btn-quiet" href="https://github.com/sonima-modmaker/physicalist-library/releases">All releases</a>
         </div>
