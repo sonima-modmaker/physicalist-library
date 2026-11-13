@@ -1,5 +1,10 @@
 {
   "message.physicalist_library.soft_experimental": "М'які тіла — експериментальна функція: увімкніть experimental.softBodies у config/physicalist_library-common.toml",
+  "subtitles.physicalist_library.bone_break": "Хрускіт кістки",
+  "message.physicalist_library.wand_grabbed": "Захоплено фізичне тіло #%s (Tab + миша: поворот, колесо: відстань, ЛКМ: заморозити)",
+  "message.physicalist_library.wand_unfrozen": "Тіло #%s розморожено й захоплено",
+  "message.physicalist_library.wand_frozen": "Тіло #%s заморожено на місці",
+  "message.physicalist_library.wand_cannot_freeze": "Ланцюги не можна заморозити",
   "item.physicalist_library.chain_tool": "Створювач фізичних ланцюгів",
   "entity.physicalist_library.physical_chain": "Физическая цепь",
   "item.physicalist_library.physicalist": "Physicalist",

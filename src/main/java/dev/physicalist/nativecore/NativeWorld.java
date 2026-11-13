@@ -168,7 +168,7 @@ public final class NativeWorld implements AutoCloseable {
   var it=bindings.entrySet().iterator();while(it.hasNext()){var e=it.next();Binding b=e.getValue();if(b.source.owner().isRemoved()||frame-b.lastSeen>100){NativeBridge.removeBody0(scene,b.id);it.remove();}else if(b.lastSeen==frame-1){double[] hold=repaired(state(b.source),b);hold[14]=8;NativeBridge.sync0(scene,new long[]{b.id},hold);}}
   Map<Entity,AABB> regions=new LinkedHashMap<>();for(var b:live)if(!b.paused)regions.merge(b.source.owner(),b.source.bounds().expandTowards(b.source.velocity()),AABB::minmax);external.update(level,regions);
   setupRigs();setupChains();long[] ids=new long[live.size()];double[] input=new double[live.size()*15];
-  for(int i=0;i<live.size();i++){Binding b=live.get(i);ids[i]=b.id;double[] s=repaired(alignedState(b.source,b),b);int flags=b.paused?8:4;if(b.source instanceof LimbSource&&b.created==frame)flags|=2;if(poseChanged(s,b.last))flags|=1;for(int a=7;a<13;a++)if(Math.abs(s[a]-b.last[a])>1e-7){flags|=2;break;}s[14]=flags;System.arraycopy(s,0,input,i*15,15);b.sent=s;}
+  for(int i=0;i<live.size();i++){Binding b=live.get(i);ids[i]=b.id;double[] s=repaired(alignedState(b.source,b),b);int flags=b.paused?8:4;if(PhysicalistFreeze.frozen(b.source.owner(),b.source.role()))flags|=16;if(b.source instanceof LimbSource&&b.created==frame)flags|=2;if(poseChanged(s,b.last))flags|=1;for(int a=7;a<13;a++)if(Math.abs(s[a]-b.last[a])>1e-7){flags|=2;break;}s[14]=flags;System.arraycopy(s,0,input,i*15,15);b.sent=s;}
   if(!live.isEmpty())NativeBridge.sync0(scene,ids,input);stepping=live;gatherNanos=System.nanoTime()-started;
  }
  private long gatherNanos;
@@ -198,17 +198,36 @@ public final class NativeWorld implements AutoCloseable {
    chain.nativeStepFinished();Long limit=chainLimits.get(chain.getUUID());if(limit!=null)for(int end=0;end<2;end++)if(chain.endpoint(end).data.hasUUID("Ship")){double[] f=NativeBridge.jointForce0(scene,limit);chain.endpoint(end).applyForce(level,new Vec3(f[0],f[1],f[2]).scale(end==0?-1:1),chain.anchor(end));}var ends=chainEndJoints.get(chain.getUUID());if(ends!=null)for(int end=0;end<2;end++)if(ends[end]>=0&&chain.endpoint(end).data.hasUUID("Ship")){double[] f=NativeBridge.jointForce0(scene,ends[end]);chain.endpoint(end).applyForce(level,new Vec3(f[0],f[1],f[2]).scale(end==0?-1:1),chain.anchor(end));}
   }
   chains.entrySet().removeIf(e->e.getValue().isRemoved());chainJoints.keySet().retainAll(chains.keySet());chainEndJoints.keySet().retainAll(chains.keySet());chainLimits.keySet().retainAll(chains.keySet());
-  dolls.entrySet().removeIf(e->e.getValue().isRemoved());rigs.keySet().retainAll(dolls.keySet());terrain.prune(frame);lastMillis=(gatherNanos+System.nanoTime()-applyStarted)/1e6;
+  dolls.entrySet().removeIf(e->e.getValue().isRemoved());rigs.keySet().retainAll(dolls.keySet());rigJoints.keySet().retainAll(dolls.keySet());rigBroken.keySet().retainAll(dolls.keySet());terrain.prune(frame);lastMillis=(gatherNanos+System.nanoTime()-applyStarted)/1e6;
  }
- private void setupRigs(){for(var e:dolls.entrySet()){long[] ids=new long[6];boolean ready=true;for(int i=0;i<6;i++){Binding b=bindings.get(e.getKey()+"/"+i);if(b==null){ready=false;break;}ids[i]=b.id;}if(!ready||Arrays.equals(ids,rigs.get(e.getKey())))continue;
+ private void setupRigs(){for(var e:dolls.entrySet()){long[] ids=new long[6];boolean ready=true;for(int i=0;i<6;i++){Binding b=bindings.get(e.getKey()+"/"+i);if(b==null){ready=false;break;}ids[i]=b.id;}if(!ready)continue;
+  var doll=e.getValue();int mask=doll.brokenMask();
+  if(Arrays.equals(ids,rigs.get(e.getKey()))){
+   // A bone broke since: its socket is swapped for a loose one.
+   Integer was=rigBroken.get(e.getKey());long[] handles=rigJoints.get(e.getKey());if(was==null||was==mask||handles==null)continue;
+   for(int i=0;i<6;i++)if(i!=1&&((was^mask)>>i&1)!=0){NativeBridge.removeJoint0(scene,handles[i]);handles[i]=NativeBridge.joint0(scene,ids[1],ids[i],jointSpec(doll,i));}
+   rigBroken.put(e.getKey(),mask);continue;}
   // s[7]: twist about the limb's own axis, s[9]: swing cone. Twist equal to the cone let legs spin 95 degrees.
   // Impulse joints (s[15]=0), not an articulation: a chain hooked to an arm or leg (a child link) turned the whole
   // ragdoll to NaN within seconds, and pulling one hung by the torso blew it apart.
-  var rig=e.getValue().rig();for(int i=0;i<6;i++){if(i==1)continue;Vec3 a=rig.torsoAnchor()[i],b=rig.limbAnchor()[i];NativeBridge.joint0(scene,ids[1],ids[i],new double[]{0,a.x,a.y,a.z,b.x,b.y,b.z,rig.twist()[i],0,rig.swing()[i],0,0,0,1,0,0});}
-  rigs.put(e.getKey(),ids);
+  long[] handles=new long[6];for(int i=0;i<6;i++){if(i==1)continue;handles[i]=NativeBridge.joint0(scene,ids[1],ids[i],jointSpec(doll,i));}
+  rigs.put(e.getKey(),ids);rigJoints.put(e.getKey(),handles);rigBroken.put(e.getKey(),mask);
  }}
+ private final Map<UUID,long[]> rigJoints=new HashMap<>();private final Map<UUID,Integer> rigBroken=new HashMap<>();
+ /**
+  * Socket of a ragdoll part on the torso. Upright rigs use anatomical ranges (s[18]=1, then twist, flex and side
+  * limits in s[19..24]; see {@link PlayerRagdollEntity.Rig#range}); animals keep the symmetric twist and cone.
+  */
+ private static double[] jointSpec(PlayerRagdollEntity doll,int i){
+  var rig=doll.rig();Vec3 a=rig.torsoAnchor()[i],b=rig.limbAnchor()[i];double[] range=doll.jointRange(i);
+  double[] s={0,a.x,a.y,a.z,b.x,b.y,b.z,rig.twist()[i],0,rig.swing()[i],0,0,0,1,0,0,0,0,0,0,0,0,0,0,0};
+  // s[11]: joint friction (1/s), a little muscle tone so free limbs do not rattle against their stops; a broken one
+  // flops more freely.
+  if(range!=null){s[18]=1;System.arraycopy(range,0,s,19,6);s[11]=doll.boneBroken(i)?.4:1.5;}
+  return s;
+ }
  public boolean simulates(Entity entity){for(var b:bindings.values())if(b.source.owner()==entity&&b.id!=0&&!b.paused&&b.lastSeen==frame)return true;return false;}
  public String bodyReport(Entity entity){for(var b:bindings.values())if(b.source.owner()==entity)return "Rapier3D body="+b.id+" state="+(b.paused?"waiting for terrain":b.lastSeen!=frame?"awaiting entity tick":b.last[14]!=0?"sleeping":"simulating")+" forces="+(b.source instanceof BodySource body&&!body.body.nativeForcesEnabled()?"flight controller":"Physicalist")+" frame="+b.lastSeen+"/"+frame;for(var s:pending.values())if(s.owner()==entity)return "Queued for Rapier3D";return "Not registered in native scene";}
  public void invalidate(net.minecraft.core.BlockPos pos){terrain.invalidate(pos);}public String report(){return String.format(java.util.Locale.ROOT,"%s: %d bodies, %d sleeping, %d paused, %d terrain sections (%d bakes), %.3f ms on the server thread, %.3f ms on the physics thread",level.dimension().location(),bindings.size(),sleeping,paused,terrain.resident(),terrain.baked(),lastMillis,workerMillis);}
- @Override public void close(){var future=running;running=null;stepping=null;if(future!=null)try{future.get(5,java.util.concurrent.TimeUnit.SECONDS);}catch(Exception ignored){}worker.shutdownNow();NativeBridge.destroyScene0(scene);bindings.clear();pending.clear();rigs.clear();dolls.clear();chains.clear();chainJoints.clear();chainEndJoints.clear();chainLimits.clear();}
+ @Override public void close(){var future=running;running=null;stepping=null;if(future!=null)try{future.get(5,java.util.concurrent.TimeUnit.SECONDS);}catch(Exception ignored){}worker.shutdownNow();NativeBridge.destroyScene0(scene);bindings.clear();pending.clear();rigs.clear();rigJoints.clear();rigBroken.clear();dolls.clear();chains.clear();chainJoints.clear();chainEndJoints.clear();chainLimits.clear();}
 }

@@ -18,9 +18,27 @@ public final class PlayerRagdollEntity extends Entity implements PhysicalistBody
  /**
   * Rest layout facing +z with the feet at y=0: 0 head, 1 torso, 2/3 arms or front legs (-x/+x), 4/5 legs or hind
   * legs. Every limb hangs off the torso; twist turns a limb about its own (local y) axis, swing is the cone.
+  * Upright rigs also have anatomical ranges ({@link #range}), which replace the symmetric cone.
   */
  public record Rig(Vec3[] half,Vec3[] center,double[] mass,Vec3[] torsoAnchor,Vec3[] limbAnchor,double[] twist,double[] swing,boolean upright){
   private static Vec3 v(double x,double y,double z){return new Vec3(x,y,z);}
+  /**
+   * Anatomical joint range of a part relative to the torso, in radians, or null for the symmetric cone: {twist min,
+   * twist max (about the limb's own y), flex min, flex max (about the torso's x: negative swings an arm or leg
+   * forward, positive tips the head forward), side min, side max (about the torso's z: positive swings toward +x)}.
+   * Shoulders lift the arm forward and up over the head but back only about 50 degrees, and out sideways but barely
+   * across the chest; hips raise the leg forward to about 115 degrees, back about 25, out 45 and in 17; the neck nods
+   * and turns but cannot spin round.
+   */
+  public double[] range(int part){
+   if(!upright||part==1)return null;
+   if(part==0)return new double[]{-1.2,1.2,-.8,1.0,-.6,.6};
+   double side=Math.signum(torsoAnchor[part].x);boolean arm=part<4;
+   double out=arm?2.9:.8,in=arm?.3:.3;double lo=side>0?-in:-out,hi=side>0?out:in;
+   return arm?new double[]{-1.0,1.0,-3.0,.9,lo,hi}:new double[]{-.5,.5,-2.0,.45,lo,hi};
+  }
+  /** A broken bone: the limb flops about loosely, held on only by the flesh. */
+  public static final double[] BROKEN={-2.6,2.6,-3.0,3.0,-3.0,3.0};
   public static final Rig PLAYER=new Rig(
    new Vec3[]{v(.25,.25,.25),v(.25,.375,.125),v(.125,.375,.125),v(.125,.375,.125),v(.125,.375,.125),v(.125,.375,.125)},
    new Vec3[]{v(0,1.78,0),v(0,1.125,0),v(-.4,1.125,0),v(.4,1.125,0),v(-.14,.345,0),v(.14,.345,0)},new double[]{1.5,4,1,1,1,1},
@@ -113,9 +131,67 @@ public final class PlayerRagdollEntity extends Entity implements PhysicalistBody
  }
  private void setMob(CompoundTag tag){mob=tag;rig=tag.contains("Type")?Rig.of(Math.clamp(tag.getDouble("W"),.1,6),Math.clamp(tag.getDouble("H"),.1,6)):Rig.PLAYER;if(ready){ready=false;parts.clear();joints.clear();}if(!level().isClientSide)entityData.set(MOB,tag);}
  private void ensure(){if(ready)return;ready=true;Vec3 torso=rig.center[1];for(int i=0;i<6;i++)parts.add(new RigidBodyState(position().add(rig.center[i].subtract(torso)),rig.half[i],rig.mass[i]));
-  for(int i=0;i<6;i++)if(i!=1)joints.add(ElasticJoint.socket(parts.get(1),parts.get(i),rig.torsoAnchor[i],rig.limbAnchor[i],COMPLIANCE[i],DAMPING[i]).limit(new Vec3(0,1,0),new Vec3(0,1,0),rig.swing[i]));
+  for(int i=0;i<6;i++)if(i!=1){var joint=ElasticJoint.socket(parts.get(1),parts.get(i),rig.torsoAnchor[i],rig.limbAnchor[i],COMPLIANCE[i],DAMPING[i]);double[] range=jointRange(i);joints.add(range!=null?joint.range(range):joint.limit(new Vec3(0,1,0),new Vec3(0,1,0),rig.swing[i]));}
   snapshot();
  }
+
+ private int broken;private final int[] strain=new int[6];private int gripTicks,gripPart=-1;
+ /** Anatomical range of a part's joint now (loose once its bone is broken), or null for the plain cone. */
+ public double[] jointRange(int part){if(part==1)return null;return (broken>>part&1)!=0?Rig.BROKEN:rig.range(part);}
+ public boolean boneBroken(int part){return (broken>>part&1)!=0;}
+ /** Bit i set: part i's bone is broken. */
+ public int brokenMask(){return broken;}
+ /** Breaks the bone of a limb (or the neck): it snaps with a crack and flops loosely from then on. */
+ public void breakBone(int part){
+  if(part==1||part<0||part>5||boneBroken(part)||rig.range(part)==null)return;ensure();broken|=1<<part;strain[part]=0;
+  for(var joint:joints)if(joint.b==parts.get(part)&&joint.range()!=null)joint.range(Rig.BROKEN);
+  var limb=parts.get(part);var at=limb.position;
+  level().playSound(null,at.x,at.y,at.z,PhysicalistContent.BONE_BREAK.get(),net.minecraft.sounds.SoundSource.NEUTRAL,1.2F,.9F+level().getRandom().nextFloat()*.2F);
+  if(level() instanceof ServerLevel server)server.sendParticles(new net.minecraft.core.particles.ItemParticleOption(net.minecraft.core.particles.ParticleTypes.ITEM,new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.BONE)),at.x,at.y,at.z,8,.08,.08,.08,.06);
+  sleeping=false;quiet=0;
+ }
+ /**
+  * Bones give way when a limb held by the wand is wrenched past its range (or torn out of its socket) for a few
+  * ticks in a row: grab someone by the arm, twist it or yank the body about by it, and the arm snaps.
+  */
+ private void bones(){
+  if(gripTicks>0)gripTicks--;else gripPart=-1;
+  var torso=parts.get(1);double scale=rig.center[1].y/1.125;
+  for(int i=0;i<6;i++){double[] range=jointRange(i);if(range==null||boneBroken(i)){strain[i]=0;continue;}
+   double gap=torso.point(rig.torsoAnchor[i]).distanceTo(parts.get(i).point(rig.limbAnchor[i]));
+   // The joint holds firm at its limit, so what counts is how far the wand forces the limb past it (or how hard it
+   // tugs on a limb that will not follow, or tears it out of its socket), not how far the limb bends: just lifting
+   // someone by the arm, the hanging body swings the shoulder up to about 1.1 rad past its range, and that must not
+   // snap it (twisting it with the wand, or a sharp turn while holding it, goes well beyond).
+   boolean held=gripTicks>0&&gripPart==i;
+   boolean wrenched=held&&(gripWrench>1.5||gripTug>1.5*scale||gap>.45*scale);strain[i]=wrenched?strain[i]+1:0;
+   if(strain[i]>=3)breakBone(i);}
+ }
+ private double gripWrench,gripTug;
+ /** Strain on a held limb, for tests: {wand twist past range, tug distance, socket gap}. */
+ double[] gripStrain(int i){var torso=parts.get(1);return new double[]{gripWrench,gripTug,torso.point(rig.torsoAnchor[i]).distanceTo(parts.get(i).point(rig.limbAnchor[i]))};}
+ private static double overshoot(double[] a,double[] range){return Math.max(Math.max(beyond(a[1],range[0],range[1]),beyond(a[0],range[2],range[3])),beyond(a[2],range[4],range[5]));}
+ private static double beyond(double v,double lo,double hi){return v<lo?lo-v:v>hi?v-hi:0;}
+ /** Limb the wand is holding (-1 for none). */
+ public int grippedPart(){return gripTicks>0?gripPart:-1;}
+ /**
+  * The wand holding one limb by a point on it: that point is pulled to goal and the limb turned to orientation, the
+  * rest of the body hangs off it through its joints.
+  */
+ public void grabLimb(int part,Vec3 local,Vec3 goal,Quaternionf orientation){
+  ensure();if(part<0||part>5)return;var p=parts.get(part);
+  Quaternionf err=new Quaternionf(orientation).mul(new Quaternionf(p.orientation).conjugate());if(err.w<0)err.set(-err.x,-err.y,-err.z,-err.w);
+  double angle=2*Math.acos(Math.min(1,err.w)),sin=Math.sqrt(Math.max(1e-12,1-err.w*err.w));
+  p.angular=angle<1e-4?Vec3.ZERO:limited(new Vec3(err.x/sin,err.y/sin,err.z/sin).scale(angle*.5),1);
+  Vec3 arm=rotate(orientation,local);
+  double[] range=jointRange(part);gripWrench=range==null?0:overshoot(ElasticJoint.angles(parts.get(1).orientation,orientation),range);
+  gripTug=goal.distanceTo(p.position.add(rotate(p.orientation,local)));
+  p.velocity=GrabController.velocity(goal.subtract(arm).subtract(p.position),p.velocity,PhysicalistConfig.defaults().gravity());
+  gripPart=part;gripTicks=3;sleeping=false;quiet=0;
+ }
+ private static Vec3 rotate(Quaternionf q,Vec3 v){var r=q.transform(new org.joml.Vector3f((float)v.x,(float)v.y,(float)v.z));return new Vec3(r.x,r.y,r.z);}
+ /** Parts the wand froze in place (bit i: part i). */
+ public int frozenParts(){return getPersistentData().getInt(PhysicalistFreeze.PARTS);}
  private void snapshot(){for(int i=0;i<6;i++){previous[i]=parts.get(i).position;previousQ[i]=new Quaternionf(parts.get(i).orientation);}}
  public Vec3 renderPosition(int i,float partial){ensure();return previous[i].lerp(parts.get(i).position,partial);}
  public Quaternionf renderRotation(int i,float partial){ensure();return new Quaternionf(previousQ[i]).slerp(parts.get(i).orientation,partial);}
@@ -123,7 +199,8 @@ public final class PlayerRagdollEntity extends Entity implements PhysicalistBody
   if(level().isClientSide){if(lerp>0){double alpha=1.0/lerp--;for(int i=0;i<6;i++){parts.get(i).position=parts.get(i).position.lerp(target[i],alpha);parts.get(i).orientation.slerp(targetQ[i],(float)alpha);}}refresh();return;}
   if(++age>=PhysicalistConfig.RAGDOLL_LIFETIME.get()*20){discard();return;}
   if(getDeltaMovement().lengthSqr()>1e-8){for(var p:parts)p.velocity=p.velocity.add(getDeltaMovement());setDeltaMovement(Vec3.ZERO);sleeping=false;quiet=0;}
-  thrownItems();
+  thrownItems();bones();
+  {int frozen=frozenParts();if(frozen!=0)for(int i=0;i<6;i++)if((frozen>>i&1)!=0){parts.get(i).velocity=Vec3.ZERO;parts.get(i).angular=Vec3.ZERO;}}
   if(dev.physicalist.nativecore.NativeWorlds.enqueue(this))return;
   if(sleeping&&PhysicalistExternalCollisions.available()&&tickCount%5==0&&!PhysicalistExternalCollisions.gather((ServerLevel)level(),this,getBoundingBox().inflate(.1)).isEmpty()){sleeping=false;quiet=0;}
   if(sleeping){if(tickCount%10!=0||supported()){refresh();return;}sleeping=false;quiet=0;}
@@ -133,7 +210,10 @@ public final class PlayerRagdollEntity extends Entity implements PhysicalistBody
  public void relaxInitialSelfContacts(){ensure();boolean overlap=false;for(int a=0;a<6;a++)for(int b=a+1;b<6;b++){var c=RagdollSelfCollision.contact(parts,a,b,0);if(c!=null&&c.depth()>.01)overlap=true;}if(!overlap)return;for(var joint:joints)joint.beginStep();for(int i=0;i<96;i++){for(var joint:joints)joint.solve(1);RagdollSelfCollision.project(parts);}refresh();}
  public void nativeStepFinished(boolean asleep){sleeping=asleep;refresh();if(tickCount%2==0||asleep)publish();}
  private boolean supported(){var l=(ServerLevel)level();for(var p:parts)if(l.getBlockCollisions(this,CompoundCollision.bounds(p.box()).move(0,-.025,0)).iterator().hasNext())return true;return false;}
+ private final Vec3[] pinned=new Vec3[6];private final Quaternionf[] pinnedQ=new Quaternionf[6];
  private void simulate(){
+  // Frozen parts (Java fallback): held where they are while the rest moves around them.
+  {int frozen=frozenParts();for(int i=0;i<6;i++)if((frozen>>i&1)!=0){if(pinned[i]==null){pinned[i]=parts.get(i).position;pinnedQ[i]=new Quaternionf(parts.get(i).orientation);}}else pinned[i]=null;}
   var level=(ServerLevel)level();AABB route=CompoundCollision.bounds(parts.getFirst().box());double maxSpeed=0;for(var p:parts){route=route.minmax(CompoundCollision.bounds(p.box()).expandTowards(p.velocity));maxSpeed=Math.max(maxSpeed,p.velocity.length());}
   route=route.inflate(.5);pausedForChunks=!level.hasChunksAt(net.minecraft.core.BlockPos.containing(route.minX,route.minY,route.minZ),net.minecraft.core.BlockPos.containing(route.maxX,route.maxY,route.maxZ));if(pausedForChunks)return;
   List<CompoundCollision.Box> obstacles=new ArrayList<>();for(var shape:level.getBlockCollisions(this,route))for(var box:shape.toAabbs())obstacles.add(CompoundCollision.box(box));
@@ -146,6 +226,7 @@ public final class PlayerRagdollEntity extends Entity implements PhysicalistBody
    for(int iteration=0;iteration<16;iteration++){
     for(var joint:joints)joint.solve(dt);
     RagdollSelfCollision.project(parts);
+    for(int i=0;i<6;i++)if(pinned[i]!=null){var p=parts.get(i);p.position=pinned[i];p.orientation.set(pinnedQ[i]);p.velocity=Vec3.ZERO;p.angular=Vec3.ZERO;}
     for(var p:parts){var box=p.box();var candidates=index.query(CompoundCollision.bounds(box).inflate(.002));PhysicsMetrics.query(candidates.size());
      for(var obstacle:candidates){var c=CompoundCollision.contact(box,obstacle);if(c==null)continue;touched=true;PhysicsMetrics.contact();p.position=p.position.add(c.normal().scale(Math.min(.2,c.depth()+.0001)));box=p.box();}
     }
@@ -187,8 +268,8 @@ public final class PlayerRagdollEntity extends Entity implements PhysicalistBody
  }
  private static Vec3 limited(Vec3 v,double cap){if(!RigidBodyState.finite(v))return Vec3.ZERO;return v.length()>cap?v.normalize().scale(cap):v;}
  @Override public void onSyncedDataUpdated(EntityDataAccessor<?> key){super.onSyncedDataUpdated(key);if(!level().isClientSide)return;if(MOB.equals(key))setMob(entityData.get(MOB));if(POSE.equals(key))readState(entityData.get(POSE),true);}
- @Override protected void addAdditionalSaveData(CompoundTag tag){ensure();tag.put("Ragdoll",state());tag.put("Mob",mob);}
- @Override protected void readAdditionalSaveData(CompoundTag tag){setMob(tag.getCompound("Mob"));readState(tag.getCompound("Ragdoll"),false);publish();}
+ @Override protected void addAdditionalSaveData(CompoundTag tag){ensure();tag.put("Ragdoll",state());tag.put("Mob",mob);tag.putInt("Broken",broken);}
+ @Override protected void readAdditionalSaveData(CompoundTag tag){setMob(tag.getCompound("Mob"));readState(tag.getCompound("Ragdoll"),false);broken=tag.getInt("Broken")&0b111101;for(var joint:joints)for(int i=0;i<6;i++)if(joint.b==parts.get(i)&&joint.range()!=null)joint.range(jointRange(i));publish();}
  @Override public boolean isPickable(){return true;}
  /** A hit shoves the ragdoll away from the attacker, hardest at the limb that was hit. */
  @Override public boolean hurt(net.minecraft.world.damagesource.DamageSource source,float amount){

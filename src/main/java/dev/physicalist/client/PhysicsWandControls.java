@@ -38,5 +38,18 @@ public final class PhysicsWandControls {
         event.setCanceled(true);
     }
 
+    private static boolean attackWasDown;
+
+    /** Left click while a body is held: freeze it. (Vanilla ignores attack clicks while an item is in use.) */
+    @SubscribeEvent public static void tick(net.neoforged.neoforge.client.event.ClientTickEvent.Post event) {
+        var minecraft = Minecraft.getInstance();
+        boolean down = minecraft.options.keyAttack.isDown();
+        if (holding() && down && !attackWasDown) {
+            PacketDistributor.sendToServer(new WandControlPacket(WandControlPacket.FREEZE, 0, 0));
+            while (minecraft.options.keyAttack.consumeClick()) { }
+        }
+        attackWasDown = down;
+    }
+
     private PhysicsWandControls() {}
 }

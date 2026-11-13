@@ -7,24 +7,34 @@ import net.minecraft.world.phys.Vec3;
 
 /** Server-side ray selection shared by the wand and deleter. */
 public final class PhysicalistTargeting {
+    /** A body the player aims at: the point the ray enters its collision and which collision part (box) that is. */
+    public record Hit(Entity entity, Vec3 point, int part) {}
+
     public static Entity aimedBody(Player player, double range) {
+        Hit hit = aim(player, range);
+        return hit == null ? null : hit.entity();
+    }
+
+    /** Nearest collision part of any physics body along the player's view, or null. */
+    public static Hit aim(Player player, double range) {
         Vec3 start = player.getEyePosition();
         Vec3 end = start.add(player.getLookAngle().scale(range));
         AABB search = player.getBoundingBox().expandTowards(player.getLookAngle().scale(range)).inflate(2);
-        Entity nearest = null;
+        Hit best = null;
         double distance = Double.POSITIVE_INFINITY;
         for (Entity candidate : player.level().getEntities(player, search,
                 entity -> PhysicalistBodies.find(entity) != null)) {
             PhysicsBody body = PhysicalistBodies.find(candidate);
             if (body == null) continue;
-            for (CompoundCollision.Box box : body.collisionBoxes()) {
-                double hit = rayFraction(box, start, end);
+            var boxes = body.collisionBoxes();
+            for (int i = 0; i < boxes.size(); i++) {
+                double hit = rayFraction(boxes.get(i), start, end);
                 if (hit >= distance) continue;
-                nearest = candidate;
                 distance = hit;
+                best = new Hit(candidate, start.lerp(end, hit), i);
             }
         }
-        return nearest;
+        return best;
     }
 
     /** Ray against the same oriented parts used by the collision solver. */

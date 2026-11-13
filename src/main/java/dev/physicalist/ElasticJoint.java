@@ -18,6 +18,26 @@ public final class ElasticJoint {
  public static ElasticJoint socket(RigidBodyState a,RigidBodyState b,Vec3 anchorA,Vec3 anchorB,double compliance,double damping){return new ElasticJoint(a,b,anchorA,anchorB,0,compliance,damping,Double.POSITIVE_INFINITY);}
  /** Cone limit in radians; axes are local unit directions. Allows free twist. */
  public ElasticJoint limit(Vec3 axisA,Vec3 axisB,double radians){if(!RigidBodyState.finite(axisA)||!RigidBodyState.finite(axisB)||axisA.lengthSqr()<1e-9||axisB.lengthSqr()<1e-9||!Double.isFinite(radians)||radians<0||radians>Math.PI)throw new IllegalArgumentException("Invalid angular limit");this.axisA=axisA.normalize();this.axisB=axisB.normalize();maximumAngle=radians;return this;}
+ private double[] range;
+ /**
+  * Anatomical range instead of the cone: {twist min, max about b's local y, flex min, max about local x, side min,
+  * max about local z}, measured on b's turn relative to a (both share their rest orientation). Null removes it.
+  */
+ public ElasticJoint range(double[] radians){if(radians!=null&&radians.length!=6)throw new IllegalArgumentException("Invalid joint range");range=radians==null?null:radians.clone();if(range!=null)axisA=null;return this;}
+ public double[] range(){return range==null?null:range.clone();}
+ /** Turn of b relative to a as {flex (x), twist (y), side (z)} angles, the way the native joint measures them. */
+ public static double[] angles(RigidBodyState a,RigidBodyState b){return angles(a.orientation,b.orientation);}
+ public static double[] angles(org.joml.Quaternionf a,org.joml.Quaternionf b){
+  var q=new org.joml.Quaternionf(a).conjugate().mul(b);if(q.w<0)q.set(-q.x,-q.y,-q.z,-q.w);
+  return new double[]{2*Math.atan2(q.x,q.w),2*Math.atan2(q.y,q.w),2*Math.atan2(q.z,q.w)};
+ }
+ private void solveRange(){
+  double[] ang=angles(a,b);double[][] limits={{range[2],range[3]},{range[0],range[1]},{range[4],range[5]}};
+  Vec3[] local={new Vec3(1,0,0),new Vec3(0,1,0),new Vec3(0,0,1)};
+  for(int i=0;i<3;i++){double over=ang[i]<limits[i][0]?ang[i]-limits[i][0]:ang[i]>limits[i][1]?ang[i]-limits[i][1]:0;if(over==0)continue;
+   Vec3 n=a.vector(local[i]);double weight=n.dot(a.inverseInertia(n).add(b.inverseInertia(n)));if(weight<1e-12)continue;
+   double impulse=Math.clamp(over,-.15,.15)/weight;a.turn(a.inverseInertia(n).scale(impulse));b.turn(b.inverseInertia(n).scale(-impulse));}
+ }
  public boolean broken(){return broken;}
  public void breakJoint(){broken=true;}
  public double error(){return Math.abs(a.point(anchorA).distanceTo(b.point(anchorB))-restLength);}
@@ -34,6 +54,7 @@ public final class ElasticJoint {
     lambda+=change;a.positionImpulse(n.scale(-change),ra);b.positionImpulse(n.scale(change),rb);
    }
   }
+  if(range!=null)solveRange();
   if(axisA!=null){Vec3 u=a.vector(axisA),v=b.vector(axisB);double angle=Math.acos(Math.clamp(u.dot(v),-1,1));
    if(angle>maximumAngle){Vec3 n=u.cross(v);if(n.lengthSqr()<1e-12)n=u.cross(Math.abs(u.y)<.9?new Vec3(0,1,0):new Vec3(1,0,0));n=n.normalize();
     double weight=n.dot(a.inverseInertia(n).add(b.inverseInertia(n)));if(weight>1e-12){double impulse=Math.min(.15,angle-maximumAngle)/weight;a.turn(a.inverseInertia(n).scale(impulse));b.turn(b.inverseInertia(n).scale(-impulse));}

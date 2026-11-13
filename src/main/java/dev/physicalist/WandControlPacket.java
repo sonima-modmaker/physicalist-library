@@ -8,7 +8,7 @@ import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 /** Client wheel and Tab-mouse input; the server validates the held wand and target. */
 public record WandControlPacket(int action, float horizontal, float vertical) implements CustomPacketPayload {
-    public static final int DISTANCE = 0, ROTATE = 1;
+    public static final int DISTANCE = 0, ROTATE = 1, FREEZE = 2;
     public static final Type<WandControlPacket> TYPE = new Type<>(
             ResourceLocation.fromNamespaceAndPath(PhysicalistLibrary.MOD_ID, "wand_control"));
     public static final StreamCodec<RegistryFriendlyByteBuf, WandControlPacket> STREAM_CODEC = StreamCodec.of(
@@ -28,6 +28,8 @@ public record WandControlPacket(int action, float horizontal, float vertical) im
             else if (packet.action == ROTATE && Float.isFinite(packet.horizontal)
                     && Float.isFinite(packet.vertical))
                 PhysicsWandItem.rotate(player, packet.horizontal, packet.vertical);
+            else if (packet.action == FREEZE)
+                PhysicsWandItem.freeze(player);
         });
     }
 }

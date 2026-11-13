@@ -1,0 +1,12 @@
+{
+  "bone_break": {
+    "subtitle": "subtitles.physicalist_library.bone_break",
+    "sounds": [
+      "physicalist_library:bone_break_1",
+      "physicalist_library:bone_break_2",
+      "physicalist_library:bone_break_3",
+      "physicalist_library:bone_break_4",
+      "physicalist_library:bone_break_5"
+    ]
+  }
+}

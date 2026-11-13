@@ -13,7 +13,7 @@ public final class NativeBridge {
     try{System.load(extract(target,variant(name,"").replace("physicalist_native","physicalist_cpu")).toString());if(NativeCpu.level0()>=3){name=variant(name,"_v3");build=" / x86-64-v3";}}
     catch(Exception|LinkageError ex){org.slf4j.LoggerFactory.getLogger("Physicalist").info("CPU probe unavailable, using the baseline backend: {}",ex.toString());}
    }
-   System.load(extract(target,name).toString());if(abi0()!=5)throw new IllegalStateException("native ABI mismatch");available=true;status="Rapier3D 0.36.1 / f64 / ABI 5"+build;
+   System.load(extract(target,name).toString());if(abi0()!=6)throw new IllegalStateException("native ABI mismatch");available=true;status="Rapier3D 0.36.1 / f64 / ABI 6"+build;
   }catch(Exception|LinkageError ex){status="Java fallback: "+ex.getMessage();}
   AVAILABLE=available;STATUS=status;org.slf4j.LoggerFactory.getLogger("Physicalist").info("Physicalist backend: {}",STATUS);
  }
@@ -44,5 +44,7 @@ public final class NativeBridge {
  public static native double[] read0(long scene,long[] bodies);
  public static native long joint0(long scene,long parent,long child,double[] specification);
  public static native double[] contacts0(long scene,long body);
+ /** Removes an impulse joint made by {@link #joint0}. */
+ public static native void removeJoint0(long scene,long joint);
  private NativeBridge(){}
 }

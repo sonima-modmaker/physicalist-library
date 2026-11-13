@@ -1,6 +1,11 @@
 {
   "message.physicalist_library.soft_experimental": "Мягкие тела — экспериментальная функция: включите experimental.softBodies в config/physicalist_library-common.toml",
   "itemGroup.physicalist_library": "Physicalist",
+  "subtitles.physicalist_library.bone_break": "Хруст кости",
+  "message.physicalist_library.wand_grabbed": "Захвачено физическое тело #%s (Tab + мышь: поворот, колесо: дальность, ЛКМ: заморозить)",
+  "message.physicalist_library.wand_unfrozen": "Тело #%s разморожено и захвачено",
+  "message.physicalist_library.wand_frozen": "Тело #%s заморожено на месте",
+  "message.physicalist_library.wand_cannot_freeze": "Цепи нельзя заморозить",
   "item.physicalist_library.physics_wand": "Физическая палочка",
   "item.physicalist_library.assembler": "Ассемблер блоков",
   "item.physicalist_library.deleter": "Удалитель физических сущностей",

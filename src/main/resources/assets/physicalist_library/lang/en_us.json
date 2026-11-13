@@ -1,6 +1,11 @@
 {
   "message.physicalist_library.soft_experimental": "Soft bodies are experimental: set experimental.softBodies = true in config/physicalist_library-common.toml",
   "itemGroup.physicalist_library": "Physicalist",
+  "subtitles.physicalist_library.bone_break": "Bone snaps",
+  "message.physicalist_library.wand_grabbed": "Grabbed physical entity #%s (Tab + mouse: turn, wheel: distance, left click: freeze)",
+  "message.physicalist_library.wand_unfrozen": "Unfroze and grabbed physical entity #%s",
+  "message.physicalist_library.wand_frozen": "Froze physical entity #%s in place",
+  "message.physicalist_library.wand_cannot_freeze": "Chains cannot be frozen",
   "item.physicalist_library.physics_wand": "Physics Wand",
   "item.physicalist_library.assembler": "Block Assembler",
   "item.physicalist_library.deleter": "Physical Entity Deleter",

@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased — anatomical joints, broken bones, a wand that grabs anywhere
+
+- **No more balance.** Ragdolls are always limp (active ragdolls, bots, walking and get-ups are gone).
+- **Anatomical joints.** Arms lift forward over the head but go back only ~50°; legs swing forward ~115°, back ~25°;
+  the neck nods and turns but cannot spin round.
+- **Broken bones.** Grab a ragdoll's arm with the wand and wrench it past its range (or tear it out) and it snaps with
+  a crack (CC0 "Deep Bone Crack/Break SFX" by Zane Little Music, opengameart.org) and flops loosely from then on.
+- **Wand grabs any point.** Bodies are held by the point you aim at, keep their turn relative to where you face,
+  turn with Tab + mouse, and **left click freezes** the held body (or the held ragdoll limb) in place; grab it again to
+  unfreeze.
+
 ## 0.19.0 — Walking bots, real get-ups, a wand that holds chains
 
 - **Walking ragdolls and bots.** `/physicalist ragdoll bots [count]` spawns up to 16 "Bot" ragdolls around you that

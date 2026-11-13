@@ -31,6 +31,8 @@ struct Scene {
     apart: HashSet<(u64, u64)>,
     friction: Vec<(RigidBodyHandle, RigidBodyHandle, f64)>,
     water: HashMap<i64, Vec<f64>>,
+    /// Bodies the wand froze in place (turned fixed by `sync`).
+    frozen: HashSet<i64>,
 }
 impl Scene {
     fn new(gravity: f64) -> Self {
@@ -57,6 +59,7 @@ impl Scene {
             apart: HashSet::new(),
             friction: Vec::new(),
             water: HashMap::new(),
+            frozen: HashSet::new(),
         }
     }
     /// Archimedes buoyancy and water drag for one substep. `spec` = [water/body density ratio,
@@ -433,6 +436,16 @@ impl Scene {
             if flags & 4 != 0 {
                 b.set_enabled(true);
             }
+            // Frozen (wand): a fixed body others still collide with; it turns dynamic again
+            // once the flag is gone. Only bodies frozen this way are turned back.
+            if flags & 16 != 0 {
+                if !b.is_fixed() {
+                    b.set_body_type(RigidBodyType::Fixed, true);
+                    self.frozen.insert(*id);
+                }
+            } else if self.frozen.remove(id) {
+                b.set_body_type(RigidBodyType::Dynamic, true);
+            }
             if flags & 1 != 0 {
                 b.set_position(pose(s, 0), true);
             }
@@ -513,7 +526,27 @@ impl Scene {
             let axis = vec(s, 12).normalize();
             j = j.local_axis1(axis).local_axis2(axis);
         }
-        if s[0] == 0. {
+        // Anatomical socket (s[18] != 0): separate ranges for twist about the limb's own
+        // (local y) axis and for swinging it forward/back (about local x) and sideways (about
+        // local z), as shoulders, hips and the neck move. The joint frame maps joint X to the
+        // body's y, joint Y to its x and joint Z to its -z (a half turn about (1,1,0)).
+        if s[0] == 0. && s.len() >= 25 && s[18] != 0. {
+            let h = std::f64::consts::FRAC_1_SQRT_2;
+            let r = Rotation::from_xyzw(h, h, 0., 0.);
+            j = j
+                .local_frame1(Pose::from_parts(vec(s, 1), r))
+                .local_frame2(Pose::from_parts(vec(s, 4), r))
+                .softness(SpringCoefficients::new(40., 1.))
+                .limits(JointAxis::AngX, [s[19], s[20]])
+                .limits(JointAxis::AngY, [s[21], s[22]])
+                .limits(JointAxis::AngZ, [-s[24], -s[23]]);
+            // Joint friction (s[11], 1/s): limbs swing loose but do not rattle against their stops.
+            // Only the momentum-conserving decay of `joint_friction`: a velocity motor on these
+            // uncoupled axes is far stiffer and held an arm from ever rising over the head.
+            if s[10] == 0. && s[11] > 0. {
+                self.friction.push((a, b, s[11]));
+            }
+        } else if s[0] == 0. {
             j = j
                 .coupled_axes(JointAxesMask::ANG_Y | JointAxesMask::ANG_Z)
                 .softness(if s.get(17).copied().unwrap_or(0.) != 0. {
@@ -841,7 +874,25 @@ pub extern "system" fn Java_dev_physicalist_nativecore_NativeBridge_abi0(
     _: JNIEnv,
     _: JClass,
 ) -> jint {
-    5
+    6
+}
+/// Removes an impulse joint (a broken bone's socket, before it is rejoined loosely).
+#[no_mangle]
+pub extern "system" fn Java_dev_physicalist_nativecore_NativeBridge_removeJoint0(
+    mut e: JNIEnv,
+    _: JClass,
+    scene: jlong,
+    joint: jlong,
+) {
+    guard(&mut e, || {
+        let mut scenes = scenes().lock().unwrap_or_else(|p| p.into_inner());
+        let s = scenes.get_mut(&scene).unwrap();
+        let h = ImpulseJointHandle::from_raw_parts(joint as u32, ((joint as u64) >> 32) as u32);
+        if let Some(j) = s.world.impulse_joints.remove(h, true) {
+            let (a, b) = (j.body1(), j.body2());
+            s.friction.retain(|(x, y, _)| !(*x == a && *y == b));
+        }
+    });
 }
 #[no_mangle]
 pub extern "system" fn Java_dev_physicalist_nativecore_NativeBridge_createScene0(

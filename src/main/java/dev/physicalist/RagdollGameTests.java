@@ -125,6 +125,59 @@ public final class RagdollGameTests {
 
  private static double upright(PlayerRagdollEntity doll){return doll.limbs().get(1).vector(new Vec3(0,1,0)).y;}
 
+ private static double flex(PlayerRagdollEntity doll,int part){return ElasticJoint.angles(doll.limbs().get(1),doll.limbs().get(part))[0];}
+ private static void drive(PlayerRagdollEntity doll,int part,double speed){var torso=doll.limbs().get(1);doll.limbs().get(part).angular=torso.vector(new Vec3(1,0,0)).scale(speed);}
+
+ /**
+  * Arms and legs move like a person's: an arm goes forward and up over the head but only a little way back, a leg
+  * swings forward far but back only a little. (Hung by its frozen torso in the air, limbs driven round both ways.)
+  */
+ @GameTest(template="empty",timeoutTicks=300) public static void limbsHaveAnatomicalRange(GameTestHelper h){
+  if(!NativeWorlds.enabled()){h.succeed();return;}var level=h.getLevel();var floor=floor(h,330,4);
+  var player=h.makeMockPlayer(net.minecraft.world.level.GameType.CREATIVE);player.moveTo(floor.getX()+.5,floor.getY()+6,floor.getZ()+.5,0,0);player.yBodyRot=0;
+  var doll=PhysicalistContent.PLAYER_RAGDOLL.get().create(level);doll.initialize(player,new Vec3(floor.getX()+.5,floor.getY()+6,floor.getZ()+.5));PhysicalistFreeze.freeze(doll,1);
+  try{for(int i=0;i<20;i++){doll.tick();NativeWorlds.flush(level);}
+   double armBack=-9,legBack=-9,armFront=9,legFront=9;
+   for(int i=0;i<40;i++){drive(doll,3,.2);drive(doll,5,.2);doll.tick();NativeWorlds.flush(level);armBack=Math.max(armBack,flex(doll,3));legBack=Math.max(legBack,flex(doll,5));}
+   for(int i=0;i<60;i++){drive(doll,3,-.2);drive(doll,5,-.2);doll.tick();NativeWorlds.flush(level);armFront=Math.min(armFront,flex(doll,3));legFront=Math.min(legFront,flex(doll,5));}
+   String log=String.format(java.util.Locale.ROOT,"arm back %.2f front %.2f, leg back %.2f front %.2f",armBack,armFront,legBack,legFront);
+   org.slf4j.LoggerFactory.getLogger("Physicalist").info("Range: {}",log);
+   h.assertTrue(armBack<1.3&&legBack<.85,"A limb bends back too far: "+log);
+   h.assertTrue(armFront<-2.2&&legFront<-1.5,"A limb cannot swing forward: "+log);
+   h.assertTrue(doll.brokenMask()==0,"A bone broke with no one holding it: "+doll.brokenMask());h.succeed();
+  }finally{doll.discard();}
+ }
+
+ /** Held by the arm with the wand and wrenched back over the shoulder, the arm snaps; lifting by it does not. */
+ @GameTest(template="empty",timeoutTicks=300) public static void wrenchedArmBreaks(GameTestHelper h){
+  if(!NativeWorlds.enabled()){h.succeed();return;}var level=h.getLevel();var floor=floor(h,340,10);
+  var player=h.makeMockPlayer(net.minecraft.world.level.GameType.CREATIVE);PlayerRagdollEntity[] dolls=new PlayerRagdollEntity[2];
+  for(int k=0;k<2;k++){player.moveTo(floor.getX()+.5-3+k*6,floor.getY()+1,floor.getZ()+.5,0,0);player.yBodyRot=0;dolls[k]=PhysicalistContent.PLAYER_RAGDOLL.get().create(level);dolls[k].initialize(player,new Vec3(floor.getX()+.5-3+k*6,floor.getY()+1+1.15,floor.getZ()+.5));}
+  try{for(int i=0;i<40;i++){for(var d:dolls)d.tick();NativeWorlds.flush(level);}
+   Vec3 hand=new Vec3(0,-.3,0);var arm0=dolls[0].limbs().get(2);var arm1=dolls[1].limbs().get(2);
+   var wrench=new org.joml.Quaternionf().rotationAxis((float)Math.PI*.9F,(float)dolls[0].limbs().get(1).vector(new Vec3(1,0,0)).x,(float)dolls[0].limbs().get(1).vector(new Vec3(1,0,0)).y,(float)dolls[0].limbs().get(1).vector(new Vec3(1,0,0)).z).mul(arm0.orientation);
+   var hold=new org.joml.Quaternionf(arm1.orientation);Vec3 lift=arm1.point(hand).add(0,1.2,0);int snapped=-1;
+   var log=new StringBuilder();
+   for(int i=0;i<80;i++){Vec3 at=arm0.point(hand);dolls[0].grabLimb(2,hand,at,wrench);dolls[1].grabLimb(2,hand,lift,hold);if(!dolls[1].boneBroken(2)){double[] s=dolls[1].gripStrain(2);log.append(String.format(java.util.Locale.ROOT,"t%d w%.2f tug%.2f gap%.2f; ",i,s[0],s[1],s[2]));}for(var d:dolls)d.tick();NativeWorlds.flush(level);if(snapped<0&&dolls[0].boneBroken(2))snapped=i;}
+   org.slf4j.LoggerFactory.getLogger("Physicalist").info("Lift by arm: {}",log);
+   h.assertTrue(snapped>=0,"Wrenched arm did not break: flex "+flex(dolls[0],2));
+   h.assertTrue(dolls[1].brokenMask()==0,"Lifting by the arm broke a bone: "+dolls[1].brokenMask()+" "+log);
+   h.assertTrue(dolls[0].jointRange(2)==PlayerRagdollEntity.Rig.BROKEN,"Broken arm keeps its range");h.succeed();
+  }finally{for(var d:dolls)d.discard();}
+ }
+
+ /** Frozen by the wand a block hangs in the air where it was; unfrozen it falls. */
+ @GameTest(template="empty",timeoutTicks=200) public static void frozenBodyStaysPut(GameTestHelper h){
+  if(!NativeWorlds.enabled()){h.succeed();return;}var level=h.getLevel();var floor=floor(h,350,4);
+  var source=floor.above(4);level.setBlock(source,Blocks.STONE.defaultBlockState(),3);var body=PhysicalBlockEntity.fromBlock(level,source,level.getBlockState(source));level.setBlock(source,Blocks.AIR.defaultBlockState(),3);
+  PhysicalistFreeze.freeze(body,-1);
+  try{double y=body.getY();for(int i=0;i<40;i++){body.tick();NativeWorlds.flush(level);}
+   h.assertTrue(Math.abs(body.getY()-y)<.01,"Frozen block moved: "+(body.getY()-y));
+   PhysicalistFreeze.unfreeze(body);for(int i=0;i<30;i++){body.tick();NativeWorlds.flush(level);}
+   h.assertTrue(y-body.getY()>1,"Unfrozen block did not fall: "+(y-body.getY()));h.succeed();
+  }finally{body.discard();}
+ }
+
  /** With ragdolls on death, a killed mob leaves a ragdoll and is no longer drawn. */
  @GameTest(template="empty") public static void deathLeavesRagdoll(GameTestHelper h){
   var level=h.getLevel();var floor=floor(h,155,3);boolean was=PhysicalistConfig.RAGDOLL_ON_DEATH.get();PhysicalistConfig.RAGDOLL_ON_DEATH.set(true);

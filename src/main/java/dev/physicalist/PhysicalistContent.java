@@ -15,6 +15,10 @@ public final class PhysicalistContent {
     public static final DeferredRegister<EntityType<?>> ENTITIES = DeferredRegister.create(Registries.ENTITY_TYPE, PhysicalistLibrary.MOD_ID);
     public static final DeferredRegister<CreativeModeTab> TABS = DeferredRegister.create(Registries.CREATIVE_MODE_TAB, PhysicalistLibrary.MOD_ID);
 
+    public static final DeferredRegister<net.minecraft.sounds.SoundEvent> SOUNDS = DeferredRegister.create(Registries.SOUND_EVENT, PhysicalistLibrary.MOD_ID);
+    /** A ragdoll's bone snapping (CC0 "Deep Bone Crack/Break SFX" by Zane Little Music, opengameart.org). */
+    public static final DeferredHolder<net.minecraft.sounds.SoundEvent, net.minecraft.sounds.SoundEvent> BONE_BREAK = SOUNDS.register("bone_break",
+            () -> net.minecraft.sounds.SoundEvent.createVariableRangeEvent(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath(PhysicalistLibrary.MOD_ID, "bone_break")));
     public static final DeferredHolder<Item, Item> PHYSICS_WAND = ITEMS.register("physics_wand",
             () -> new PhysicsWandItem(new Item.Properties().stacksTo(1)));
     public static final DeferredHolder<Item,Item> CHAIN_TOOL=ITEMS.register("chain_tool",()->new PhysicsChainItem(new Item.Properties().stacksTo(1)));
