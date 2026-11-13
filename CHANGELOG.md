@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased — anatomical joints, broken bones, a wand that grabs anywhere
+## 0.20.0 — anatomical joints, broken bones, a wand that grabs anywhere
 
 - **No more balance.** Ragdolls are always limp (active ragdolls, bots, walking and get-ups are gone).
 - **Anatomical joints.** Arms lift forward over the head but go back only ~50°; legs swing forward ~115°, back ~25°;
@@ -11,6 +11,10 @@
   turn with Tab + mouse, and **left click freezes** the held body (or the held ragdoll limb) in place; grab it again to
   unfreeze.
 
+- **Mob ragdolls hold together.** Animals' legs and heads hang from the model's own hip and neck joints instead of
+  floating apart from the body.
+- **Every size.** Baby villagers, zombies and animals, small/medium/big slimes and magma cubes (and giants, ghasts)
+  are drawn at their real size; slimes lie as one blob. `/physicalist ragdoll mob <type> [baby|small|medium|big|adult]`.
 ## 0.19.0 — Walking bots, real get-ups, a wand that holds chains
 
 - **Walking ragdolls and bots.** `/physicalist ragdoll bots [count]` spawns up to 16 "Bot" ragdolls around you that
