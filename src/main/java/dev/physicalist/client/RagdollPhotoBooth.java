@@ -69,14 +69,13 @@ public final class RagdollPhotoBooth {
                     if (types[i] == EntityType.PLAYER) {
                         player.setYBodyRot(180);
                         doll.initialize(player, new net.minecraft.world.phys.Vec3(x, ground.getY() + 1.15, z));
-                        doll.setActive(true);
                     } else {
                         var mob = types[i].create(level);
                         mob.moveTo(x, ground.getY() + .05, z, 180, 0);
                         if (mob instanceof net.minecraft.world.entity.LivingEntity living) living.yBodyRot = 180;
                         if (mob instanceof net.minecraft.world.entity.npc.Villager villager)
                             villager.setVillagerData(new net.minecraft.world.entity.npc.VillagerData(biomes[i], professions[i], 2));
-                        doll.initialize(mob, true);
+                        doll.initialize(mob);
                         mob.discard();
                     }
                     level.addFreshEntity(doll);

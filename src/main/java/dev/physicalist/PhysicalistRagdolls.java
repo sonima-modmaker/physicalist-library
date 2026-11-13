@@ -13,11 +13,10 @@ import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
 /**
- * Public ragdoll API. Other mods can turn any entity into a ragdoll, make it keep its balance, or give a dying
- * entity the push it should fly off with:
+ * Public ragdoll API. Other mods can turn any entity into a ragdoll or give a dying entity the push it should fly
+ * off with:
  * <pre>
- * PhysicalistRagdolls.spawn(zombie, shotDirection.scale(.6), false);   // limp body thrown by a shot
- * PhysicalistRagdolls.spawn(villager, Vec3.ZERO, true);               // stands and keeps its balance
+ * PhysicalistRagdolls.spawn(zombie, shotDirection.scale(.6));         // limp body thrown by a shot
  * PhysicalistRagdolls.deathPush(target, bulletVelocity.scale(.02));   // before killing it, with ragdolls.onDeath on
  * </pre>
  */
@@ -31,15 +30,14 @@ public final class PhysicalistRagdolls {
      * A ragdoll copy of an entity where it stands, moving with its velocity plus push (blocks per tick). A mob is
      * replaced by its ragdoll; a player keeps their own entity and gets a copy with their skin.
      *
-     * @param active whether the ragdoll keeps its balance (upright bodies only) until a push knocks it over
      * @return the ragdoll, or null if none could be spawned
      */
-    public static PlayerRagdollEntity spawn(Entity source, Vec3 push, boolean active) {
+    public static PlayerRagdollEntity spawn(Entity source, Vec3 push) {
         if (!(source.level() instanceof ServerLevel level) || source instanceof PlayerRagdollEntity
                 || source instanceof ArmorStand || PhysicalistBodies.find(source) != null) return null;
         var doll = PhysicalistContent.PLAYER_RAGDOLL.get().create(level);
         if (doll == null) return null;
-        doll.initialize(source, active);
+        doll.initialize(source);
         if (push != null && RigidBodyState.finite(push) && push.lengthSqr() > 0)
             doll.setDeltaMovement(push.length() > 3 ? push.normalize().scale(3) : push);
         if (!level.addFreshEntity(doll)) return null;
@@ -66,7 +64,7 @@ public final class PhysicalistRagdolls {
                 >= MAXIMUM_NEARBY) return;
         var doll = PhysicalistContent.PLAYER_RAGDOLL.get().create(level);
         if (doll == null) return;
-        doll.initialize(entity, false);
+        doll.initialize(entity);
         doll.setDeltaMovement(push(entity, event.getSource()));
         if (!level.addFreshEntity(doll)) return;
         // The dying entity still drops its loot and experience; it is only no longer drawn.
