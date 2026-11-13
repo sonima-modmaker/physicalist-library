@@ -62,8 +62,15 @@ public final class PlayerRagdollRenderer extends EntityRenderer<PlayerRagdollEnt
   * limb by name, else to the nearest limb; crossed arms (villagers, witches, wandering traders) are split into two
   * hanging arms. Layers that draw regardless of visibility (a carried block, a pumpkin head) are drawn with the head.
   */
- private record MobView(LivingEntity dummy,LivingEntityRenderer<LivingEntity,EntityModel<LivingEntity>> renderer,EntityModel<LivingEntity> model,ResourceLocation texture,List<Cut> cuts,List<RenderLayer<LivingEntity,EntityModel<LivingEntity>>> masked,List<RenderLayer<LivingEntity,EntityModel<LivingEntity>>> loose,Vec3[] shift){
+ private record MobView(LivingEntity dummy,LivingEntityRenderer<LivingEntity,EntityModel<LivingEntity>> renderer,EntityModel<LivingEntity> model,ResourceLocation texture,List<Cut> cuts,List<RenderLayer<LivingEntity,EntityModel<LivingEntity>>> masked,List<RenderLayer<LivingEntity,EntityModel<LivingEntity>>> loose,Vec3[] shift,float size){
   private static Field cubes;
+  /** The extra scale a mob's renderer draws it at (a slime's size, a ghast's or giant's bulk), 1 if unknown. */
+  private static double rendererScale(LivingEntityRenderer<?,?> renderer,LivingEntity dummy){
+   try{var m=LivingEntityRenderer.class.getDeclaredMethod("scale",LivingEntity.class,PoseStack.class,float.class);m.setAccessible(true);
+    var pose=new PoseStack();m.invoke(renderer,dummy,pose,0F);var s=pose.last().pose().getScale(new Vector3f());double v=Math.cbrt(Math.abs(s.x*s.y*s.z));
+    return Double.isFinite(v)&&v>.01?v:1;}
+   catch(ReflectiveOperationException|RuntimeException|LinkageError error){return 1;}
+  }
   @SuppressWarnings({"unchecked","rawtypes"})
   static MobView create(PlayerRagdollEntity doll){
    try{
@@ -78,9 +85,20 @@ public final class PlayerRagdollRenderer extends EntityRenderer<PlayerRagdollEnt
     // where the model puts them and stay joined. Centring each limb's parts on its box instead lifted a villager's
     // body by its long robe and left the legs hanging apart below it. Animals' rigs are made from their size only:
     // their parts are centred on the boxes.
+    // Babies, slimes and other resized mobs: the model drawn at the size the mob was (its rig is built from its box).
+    double size=dummy.getScale()*rendererScale(renderer,dummy);
     Vec3[] sum=new Vec3[6];double[] weight=new double[6];if(rig.upright())Arrays.fill(weight,-1);
-    if(!rig.upright())for(var piece:main.pieces){for(int l=0;l<6;l++){var b=bounds(piece,l);if(b==null)continue;double w=Math.max(b[1].x*b[1].y*b[1].z,1e-6);sum[l]=(sum[l]==null?Vec3.ZERO:sum[l]).add(b[0].scale(w));weight[l]+=w;}}
+    // Each animal limb hangs from its joint: the model's own pivot of the leg (hip) or head (neck) goes to the rig's
+    // joint, and the body sits where its hips meet the rig's hips on average. Centring legs on their boxes left a gap
+    // wherever the model's legs were shorter than the rig's, and the legs looked torn off.
+    Vec3[] pivot=new Vec3[6];double[] biggest=new double[6];
+    if(!rig.upright())for(var piece:main.pieces){for(int l=0;l<6;l++){var b=bounds(piece,l);if(b==null)continue;double w=Math.max(b[1].x*b[1].y*b[1].z,1e-6);sum[l]=(sum[l]==null?Vec3.ZERO:sum[l]).add(b[0].scale(w*size));weight[l]+=w;
+     if(piece.split==null&&w>biggest[l]){var p=rest(new Vector3f(piece.part.x,piece.part.y,piece.part.z).div(16));var lo=b[0].subtract(b[1].scale(.5)).subtract(.07,.07,.07);var hi=b[0].add(b[1].scale(.5)).add(.07,.07,.07);
+      if(p.x>=lo.x&&p.y>=lo.y&&p.z>=lo.z&&p.x<=hi.x&&p.y<=hi.y&&p.z<=hi.z){biggest[l]=w;pivot[l]=p.scale(size);}}}}
     Vec3[] shift=new Vec3[6];for(int l=0;l<6;l++)shift[l]=weight[l]>0?rig.center()[l].subtract(sum[l].scale(1/weight[l])):Vec3.ZERO;
+    if(!rig.upright()){Vec3 hips=Vec3.ZERO;int n=0;for(int l=2;l<6;l++)if(pivot[l]!=null&&weight[l]>0){hips=hips.add(rig.center()[1].add(rig.torsoAnchor()[l]).subtract(pivot[l]));n++;}
+     if(n>0&&weight[1]>0)shift[1]=hips.scale(1./n);
+     for(int l=0;l<6;l++)if(l!=1&&pivot[l]!=null&&weight[l]>0)shift[l]=rig.center()[l].add(rig.limbAnchor()[l]).subtract(pivot[l]);}
     List<RenderLayer<LivingEntity,EntityModel<LivingEntity>>> masked=new ArrayList<>(),loose=new ArrayList<>();
     var layersField=LivingEntityRenderer.class.getDeclaredField("layers");layersField.setAccessible(true);
     for(var layer:(List<RenderLayer<LivingEntity,EntityModel<LivingEntity>>>)layersField.get(renderer)){
@@ -89,7 +107,7 @@ public final class PlayerRagdollRenderer extends EntityRenderer<PlayerRagdollEnt
       if(own!=null&&own!=model&&cuts.stream().noneMatch(k->k.model==own)){var extra=cut(own,rig);if(extra!=null)cuts.add(extra);}
      }
     }
-    var view=new MobView(dummy,renderer,model,texture,cuts,masked,loose,shift);
+    var view=new MobView(dummy,renderer,model,texture,cuts,masked,loose,shift,(float)size);
     for(var layer:(List<RenderLayer<LivingEntity,EntityModel<LivingEntity>>>)layersField.get(renderer)){
      // Probe: a layer that still draws with every part hidden does not follow the limbs.
      var counter=new Counter();var saved=view.hideAll();
@@ -209,7 +227,7 @@ public final class PlayerRagdollRenderer extends EntityRenderer<PlayerRagdollEnt
     for(int limb=0;limb<6;limb++){
      boolean any=show(limb,saved);if(!any&&limb!=0)continue;
      Vec3 pos=e.renderPosition(limb,partial).subtract(anchor);Vec3 back=shift[limb].subtract(rig.center()[limb]);
-     pose.pushPose();pose.translate(pos.x,pos.y,pos.z);pose.mulPose(e.renderRotation(limb,partial));pose.translate(back.x,back.y,back.z);pose.scale(1,-1,-1);pose.translate(0,-1.501,0);
+     pose.pushPose();pose.translate(pos.x,pos.y,pos.z);pose.mulPose(e.renderRotation(limb,partial));pose.translate(back.x,back.y,back.z);pose.scale(size,-size,-size);pose.translate(0,-1.501,0);
      if(any)model.renderToBuffer(pose,buffers.getBuffer(model.renderType(texture)),light,OverlayTexture.NO_OVERLAY,-1);
      if(any)for(var layer:masked)layer.render(pose,buffers,light,dummy,0,0,partial,age,0,0);
      if(limb==0){var hidden=hideAll();try{for(var layer:loose)layer.render(pose,buffers,light,dummy,0,0,partial,age,0,0);}finally{restore(hidden);}}

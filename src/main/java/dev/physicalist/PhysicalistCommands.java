@@ -33,7 +33,10 @@ public final class PhysicalistCommands {
                         .then(Commands.literal("mob")
                                 .then(Commands.argument("type", net.minecraft.commands.arguments.ResourceArgument.resource(event.getBuildContext(), net.minecraft.core.registries.Registries.ENTITY_TYPE))
                                         .suggests(net.minecraft.commands.synchronization.SuggestionProviders.SUMMONABLE_ENTITIES)
-                                        .executes(ctx -> ragdollMob(ctx.getSource(),net.minecraft.commands.arguments.ResourceArgument.getSummonableEntityType(ctx,"type").value()))))
+                                        .executes(ctx -> ragdollMob(ctx.getSource(),net.minecraft.commands.arguments.ResourceArgument.getSummonableEntityType(ctx,"type").value(),""))
+                                        .then(Commands.argument("size", StringArgumentType.word())
+                                                .suggests((ctx,b)->net.minecraft.commands.SharedSuggestionProvider.suggest(SIZES,b))
+                                                .executes(ctx -> ragdollMob(ctx.getSource(),net.minecraft.commands.arguments.ResourceArgument.getSummonableEntityType(ctx,"type").value(),StringArgumentType.getString(ctx,"size"))))))
                         .then(Commands.literal("of")
                                 .then(Commands.argument("targets", net.minecraft.commands.arguments.EntityArgument.entities())
                                         .executes(ctx -> ragdollOf(ctx.getSource(),net.minecraft.commands.arguments.EntityArgument.getEntities(ctx,"targets")))))
@@ -85,11 +88,23 @@ public final class PhysicalistCommands {
         return source.getLevel().getEntitiesOfClass(PlayerRagdollEntity.class,new net.minecraft.world.phys.AABB(source.getPosition(),source.getPosition()).inflate(128)).size()>=32;
     }
     /** Ragdoll of a freshly spawned mob of that type (random variant), two blocks in front of the caller. */
-    private static int ragdollMob(CommandSourceStack source,net.minecraft.world.entity.EntityType<?> type){
+    private static final java.util.List<String> SIZES=java.util.List.of("baby","small","medium","big","adult");
+    /**
+     * Makes a mob that size: baby/small is a baby (villagers, zombies, animals) or the smallest slime, medium a
+     * middle slime, big the biggest slime, adult a grown-up; anything else leaves the random spawn size.
+     */
+    private static void resize(Entity mob,String size){
+        boolean small=size.equals("baby")||size.equals("small"),grown=size.equals("adult")||size.equals("big")||size.equals("medium");
+        if(mob instanceof net.minecraft.world.entity.monster.Slime slime){int s=switch(size){case "baby","small"->1;case "medium"->2;case "big"->4;default->-1;};if(s>0)slime.setSize(s,true);return;}
+        if(mob instanceof net.minecraft.world.entity.AgeableMob ageable){if(small)ageable.setAge(-24000);else if(grown)ageable.setAge(0);return;}
+        if(mob instanceof net.minecraft.world.entity.Mob m&&(small||grown))m.setBaby(small);
+    }
+    private static int ragdollMob(CommandSourceStack source,net.minecraft.world.entity.EntityType<?> type,String size){
         if(crowded(source))return failure(source,"At most 32 nearby test ragdolls; delete old dummies first");
         var level=source.getLevel();Entity mob=type.create(level);if(mob==null)return failure(source,"Cannot create "+BuiltInRegistries.ENTITY_TYPE.getKey(type));
         Vec3 at=source.getPosition().add(source.getEntity() instanceof net.minecraft.world.entity.LivingEntity living?living.getLookAngle().multiply(2,0,2):Vec3.ZERO).add(0,.1,0);
         mob.moveTo(at.x,at.y,at.z,source.getRotation().y+180,0);if(mob instanceof net.minecraft.world.entity.Mob m){m.yBodyRot=m.getYRot();m.finalizeSpawn(level,level.getCurrentDifficultyAt(BlockPos.containing(at)),net.minecraft.world.entity.MobSpawnType.COMMAND,null);}
+        resize(mob,size.toLowerCase(java.util.Locale.ROOT));
         var doll=PhysicalistContent.PLAYER_RAGDOLL.get().create(level);if(doll==null)return 0;doll.initialize(mob);mob.discard();
         if(!level.addFreshEntity(doll))return failure(source,"Cannot spawn ragdoll");
         source.sendSuccess(()->Component.literal("Spawned ragdoll of "+BuiltInRegistries.ENTITY_TYPE.getKey(type)+" #"+doll.getId()),true);return 1;

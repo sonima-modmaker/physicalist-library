@@ -190,4 +190,17 @@ public final class RagdollGameTests {
    for(var d:dolls)d.discard();h.succeed();
   }finally{PhysicalistConfig.RAGDOLL_ON_DEATH.set(was);}
  }
+
+ /** Small and big slimes, baby and grown villagers make ragdolls of their own size; a slime lies on the ground. */
+ @GameTest(template="empty") public static void ragdollsKeepMobSize(GameTestHelper h){
+  var level=h.getLevel();double[] torso=new double[4];
+  for(int k=0;k<4;k++){net.minecraft.world.entity.Mob mob;
+   if(k<2){var slime=EntityType.SLIME.create(level);slime.setSize(k==0?1:4,true);mob=slime;}
+   else{var villager=EntityType.VILLAGER.create(level);villager.setAge(k==2?-24000:0);mob=villager;}
+   mob.moveTo(h.absoluteVec(new Vec3(1.5,3,1.5)));var doll=PhysicalistContent.PLAYER_RAGDOLL.get().create(level);doll.initialize(mob);
+   torso[k]=doll.rig().half()[1].y;if(k<2)h.assertTrue(doll.rig().center()[4].y<doll.rig().half()[1].y*.2,"Slime ragdoll stands on legs");}
+  h.assertTrue(torso[1]>torso[0]*3,"Big slime ragdoll is not bigger: "+torso[0]+" "+torso[1]);
+  h.assertTrue(torso[3]>torso[2]*1.6,"Baby villager ragdoll is not smaller: "+torso[2]+" "+torso[3]);
+  h.succeed();
+ }
 }

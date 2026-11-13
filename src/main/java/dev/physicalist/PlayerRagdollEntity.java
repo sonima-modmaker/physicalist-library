@@ -53,8 +53,10 @@ public final class PlayerRagdollEntity extends Entity implements PhysicalistBody
    double[] masses=PLAYER.mass.clone();for(int i=0;i<6;i++)masses[i]*=mass;return new Rig(out[0],out[1],masses,out[2],out[3],PLAYER.twist,PLAYER.swing,true);
   }
   /** Animals: a horizontal torso on four legs with the head in front. */
-  static Rig quadruped(double width,double height){
-   double legs=Math.clamp(height*.45,.12,2),body=Math.max(.15,(height-legs)*.85),length=width*1.1,side=width*.36,leg=Math.clamp(width*.12,.04,.35),head=Math.clamp(width*.28,.08,.5);
+  static Rig quadruped(double width,double height){return quadruped(width,height,false);}
+  /** A blob (slimes, magma cubes) has no legs to stand on: stubs under a body as big as the mob. */
+  static Rig quadruped(double width,double height,boolean blob){
+   double legs=blob?Math.max(.03,height*.04):Math.clamp(height*.45,.12,2),body=blob?height-legs:Math.max(.15,(height-legs)*.85),length=width*1.1,side=width*.36,leg=Math.clamp(width*.12,.04,.35),head=Math.clamp(width*.28,.08,.5);
    double mass=Math.clamp(width*width*height/(.6*.6*1.8),.1,25);Vec3 torso=v(0,legs+body/2,0);
    Vec3[] half=new Vec3[6],center=new Vec3[6],torsoAnchor=new Vec3[6],limbAnchor=new Vec3[6];
    half[1]=v(side,body/2,length/2);center[1]=torso;torsoAnchor[1]=limbAnchor[1]=Vec3.ZERO;
@@ -63,7 +65,8 @@ public final class PlayerRagdollEntity extends Entity implements PhysicalistBody
     double gap=Math.min(.05,legs*.15);half[i]=v(leg,(legs-gap)/2,leg);center[i]=v(x,(legs-gap)/2,z);torsoAnchor[i]=v(x,-body/2,z);limbAnchor[i]=v(0,(legs-gap)/2+gap,0);}
    return new Rig(half,center,new double[]{mass*.12,mass*.6,mass*.07,mass*.07,mass*.07,mass*.07},torsoAnchor,limbAnchor,new double[]{.6,0,.3,.3,.3,.3},new double[]{.8,0,1.1,1.1,1.1,1.1},false);
   }
-  static Rig of(double width,double height){return height>=width*1.6?humanoid(width,height):quadruped(width,height);}
+  static Rig of(double width,double height){return of(width,height,false);}
+  static Rig of(double width,double height,boolean blob){return blob?quadruped(width,height,true):height>=width*1.6?humanoid(width,height):quadruped(width,height);}
  }
  private static final double[] COMPLIANCE={.00005,0,.00008,.00008,.00003,.00003},DAMPING={.25,0,.22,.22,.28,.28};
  private final List<RigidBodyState> parts=new ArrayList<>();private final List<ElasticJoint> joints=new ArrayList<>();
@@ -87,7 +90,7 @@ public final class PlayerRagdollEntity extends Entity implements PhysicalistBody
  public void initialize(Entity source){
   if(source instanceof Player player){owner=player.getGameProfile();setPos(source.position().add(0,rig.center[1].y,0));ensure();}
   else{
-   var tag=new CompoundTag();tag.putString("Type",EntityType.getKey(source.getType()).toString());tag.putDouble("W",source.getBbWidth());tag.putDouble("H",source.getBbHeight());
+   var tag=new CompoundTag();tag.putString("Type",EntityType.getKey(source.getType()).toString());tag.putDouble("W",source.getBbWidth());tag.putDouble("H",source.getBbHeight());if(source instanceof net.minecraft.world.entity.monster.Slime)tag.putBoolean("Blob",true);
    var data=source.saveWithoutId(new CompoundTag());for(String key:List.of("Pos","Motion","Rotation","UUID","Passengers","Brain","Inventory","Items","ArmorItems","HandItems","Attributes","ActiveEffects","Leash","Offers","Gossips","HurtTime","DeathTime","Health","CustomName"))data.remove(key);
    if(data.sizeInBytes()<8192)tag.put("Data",data);setMob(tag);
    setPos(source.position().add(0,rig.center[1].y,0));ensure();
@@ -129,7 +132,7 @@ public final class PlayerRagdollEntity extends Entity implements PhysicalistBody
    item.setDeltaMovement(v.scale(-.25).add(0,.05,0));sleeping=false;quiet=0;
   }
  }
- private void setMob(CompoundTag tag){mob=tag;rig=tag.contains("Type")?Rig.of(Math.clamp(tag.getDouble("W"),.1,6),Math.clamp(tag.getDouble("H"),.1,6)):Rig.PLAYER;if(ready){ready=false;parts.clear();joints.clear();}if(!level().isClientSide)entityData.set(MOB,tag);}
+ private void setMob(CompoundTag tag){mob=tag;rig=tag.contains("Type")?Rig.of(Math.clamp(tag.getDouble("W"),.1,6),Math.clamp(tag.getDouble("H"),.1,6),tag.getBoolean("Blob")):Rig.PLAYER;if(ready){ready=false;parts.clear();joints.clear();}if(!level().isClientSide)entityData.set(MOB,tag);}
  private void ensure(){if(ready)return;ready=true;Vec3 torso=rig.center[1];for(int i=0;i<6;i++)parts.add(new RigidBodyState(position().add(rig.center[i].subtract(torso)),rig.half[i],rig.mass[i]));
   for(int i=0;i<6;i++)if(i!=1){var joint=ElasticJoint.socket(parts.get(1),parts.get(i),rig.torsoAnchor[i],rig.limbAnchor[i],COMPLIANCE[i],DAMPING[i]);double[] range=jointRange(i);joints.add(range!=null?joint.range(range):joint.limit(new Vec3(0,1,0),new Vec3(0,1,0),rig.swing[i]));}
   snapshot();
