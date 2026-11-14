@@ -358,6 +358,41 @@ public final class SoftBodyEntity extends Entity {
     /** World collision boxes around the body, a little ahead of where it is heading. Empty sky is skipped by section. */
     private double[] terrain(ServerLevel level) { return SoftWorlds.terrain(level, bounds, 1.5 + Math.min(lastMove * 3, 6)); }
 
+    // ------------------------------------------------------------ walking on it
+
+    /**
+     * Thin plates along the hull near query, for players to stand and walk on: the server's latest pose, or on a
+     * client the pose being drawn.
+     */
+    public List<dev.physicalist.CompoundCollision.Box> walkBoxes(AABB query) {
+        boolean client = level().isClientSide;
+        SoftStructure s = client ? shown : structure;
+        double[] p = client ? (shown != null && scratch.length == shown.nodes * 3 ? scratch : null) : nodes;
+        if (s == null || p == null || p.length != s.nodes * 3 || s.skin == null || bounds == null || !bounds.inflate(1).intersects(query)) return List.of();
+        List<dev.physicalist.CompoundCollision.Box> out = new ArrayList<>();
+        double[] tip = new double[3];
+        final double thick = 0.04;
+        for (int i = 0; i < s.nodes; i++) {
+            int o = i * SoftStructure.SKIN_STRIDE;
+            int b = (int) s.skin[o], c = (int) s.skin[o + 1];
+            if (b < 0) continue;
+            double halfT = s.skin[o + 5], halfU = s.skin[o + 6], half = Math.max(halfT, halfU), x = p[i * 3], y = p[i * 3 + 1], z = p[i * 3 + 2];
+            if (x + half < query.minX || x - half > query.maxX || y + half < query.minY || y - half > query.maxY || z + half < query.minZ || z - half > query.maxZ) continue;
+            SoftStructure.pointInFrame(p, i, b, c, (float) s.skin[o + 2], (float) s.skin[o + 3], (float) s.skin[o + 4], tip);
+            Vec3 at = new Vec3(x, y, z), n = new Vec3(tip[0] - x, tip[1] - y, tip[2] - z);
+            if (n.lengthSqr() < 1e-12) continue;
+            n = n.normalize();
+            Vec3 t = new Vec3(p[b * 3] - x, p[b * 3 + 1] - y, p[b * 3 + 2] - z);
+            t = t.subtract(n.scale(t.dot(n)));
+            if (t.lengthSqr() < 1e-12) continue;
+            t = t.normalize();
+            Vec3 u = n.cross(t);
+            // Centred on the skin node, so it stands proud of the drawn hull by only its half thickness either way.
+            out.add(new dev.physicalist.CompoundCollision.Box(at, new Vec3[]{t, u, n}, new double[]{halfT, halfU, thick}));
+        }
+        return out;
+    }
+
     // ------------------------------------------------------------ network
 
     SoftPackets.State state(boolean withComponents) {

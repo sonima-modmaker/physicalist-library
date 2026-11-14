@@ -147,7 +147,15 @@ public final class NativeWorld implements AutoCloseable {
  /** Synchronous step on the calling thread: finishes any step in flight, then runs a whole one. Used by tests and benchmarks. */
  public void flush(){long timer=PhysicsMetrics.begin();try{settleStep();begin();if(stepping!=null){timedStep();}complete();}finally{PhysicsMetrics.end(timer);}}
  /** End of a level tick: gather inputs and start the next step on the physics thread. */
- public void launch(){long timer=PhysicsMetrics.begin();try{settleStep();begin();if(stepping!=null)running=worker.submit(this::timedStep);else complete();}finally{PhysicsMetrics.end(timer);}}
+ public void launch(){if(busy()){late++;return;}long timer=PhysicsMetrics.begin();try{settleStep();begin();if(stepping!=null)running=worker.submit(this::timedStep);else complete();}finally{PhysicsMetrics.end(timer);}}
+ /**
+  * Start of a level tick: applies the step if the physics thread has finished it. A step still running is left alone
+  * (and the next one starts only once it is done): an overloaded scene slows its physics down instead of the server.
+  * Waiting here made a heap of awake bodies cost the whole server its TPS.
+  */
+ public void poll(){if(busy())return;settle();}
+ private boolean busy(){var future=running;return stepping!=null&&future!=null&&!future.isDone();}
+ private int late;
  /** Waits for the step in flight (if any) and applies its result. Safe to call any time on the server thread. */
  public void settle(){if(stepping==null)return;long timer=PhysicsMetrics.begin();try{settleStep();}finally{PhysicsMetrics.end(timer);}}
  private void settleStep(){if(stepping==null)return;var future=running;running=null;
@@ -167,11 +175,25 @@ public final class NativeWorld implements AutoCloseable {
   pending.clear();
   var it=bindings.entrySet().iterator();while(it.hasNext()){var e=it.next();Binding b=e.getValue();if(b.source.owner().isRemoved()||frame-b.lastSeen>100){NativeBridge.removeBody0(scene,b.id);it.remove();}else if(b.lastSeen==frame-1){double[] hold=repaired(state(b.source),b);hold[14]=8;NativeBridge.sync0(scene,new long[]{b.id},hold);}}
   Map<Entity,AABB> regions=new LinkedHashMap<>();for(var b:live)if(!b.paused)regions.merge(b.source.owner(),b.source.bounds().expandTowards(b.source.velocity()),AABB::minmax);external.update(level,regions);
-  setupRigs();setupChains();long[] ids=new long[live.size()];double[] input=new double[live.size()*15];
-  for(int i=0;i<live.size();i++){Binding b=live.get(i);ids[i]=b.id;double[] s=repaired(alignedState(b.source,b),b);int flags=b.paused?8:4;if(PhysicalistFreeze.frozen(b.source.owner(),b.source.role()))flags|=16;if(b.source instanceof LimbSource&&b.created==frame)flags|=2;if(poseChanged(s,b.last))flags|=1;for(int a=7;a<13;a++)if(Math.abs(s[a]-b.last[a])>1e-7){flags|=2;break;}s[14]=flags;System.arraycopy(s,0,input,i*15,15);b.sent=s;}
+  setupRigs();setupChains();moved=pushed=0;long[] ids=new long[live.size()];double[] input=new double[live.size()*15];
+  for(int i=0;i<live.size();i++){Binding b=live.get(i);ids[i]=b.id;double[] s=repaired(alignedState(b.source,b),b);int flags=b.paused?8:4;if(PhysicalistFreeze.frozen(b.source.owner(),b.source.role()))flags|=16;if(b.source instanceof LimbSource&&b.created==frame)flags|=2;if(poseChanged(s,b.last)){flags|=1;moved++;}if(velocityChanged(b,s)){flags|=2;pushed++;}s[14]=flags;System.arraycopy(s,0,input,i*15,15);b.sent=s;}
   if(!live.isEmpty())NativeBridge.sync0(scene,ids,input);stepping=live;gatherNanos=System.nanoTime()-started;
  }
  private long gatherNanos;
+ /** Bodies whose pose / velocity were set from outside the step last tick (each such write wakes the body). */
+ private int moved,pushed;
+ /**
+  * Whether a body's velocity was changed outside the step (a push, a drag, air) and must be written to the native
+  * body, which also wakes it. Air drag on a body all but at rest changed it by a hair every tick: each write woke
+  * the body again, so a settled pile (dropped guns) never fell asleep and the whole pile was solved every tick.
+  * Such tiny nudges of a slow rigid body are left out; a real push is far larger.
+  */
+ private static boolean velocityChanged(Binding b,double[] s){
+  double change=0,speed=0,spin=0;for(int a=7;a<13;a++)change=Math.max(change,Math.abs(s[a]-b.last[a]));if(change<=1e-7)return false;
+  if(!(b.source instanceof BodySource))return true;
+  for(int a=7;a<10;a++)speed+=s[a]*s[a];for(int a=10;a<13;a++)spin+=s[a]*s[a];
+  return change>.02||speed>.25||spin>.25;
+ }
  /**
   * The step result with whatever the server thread did to the body while the step ran on the physics thread: a
   * teleport keeps its pose, and a push, punch or wand drag adds its velocity change on top of the step. Dropping
@@ -228,6 +250,6 @@ public final class NativeWorld implements AutoCloseable {
  }
  public boolean simulates(Entity entity){for(var b:bindings.values())if(b.source.owner()==entity&&b.id!=0&&!b.paused&&b.lastSeen==frame)return true;return false;}
  public String bodyReport(Entity entity){for(var b:bindings.values())if(b.source.owner()==entity)return "Rapier3D body="+b.id+" state="+(b.paused?"waiting for terrain":b.lastSeen!=frame?"awaiting entity tick":b.last[14]!=0?"sleeping":"simulating")+" forces="+(b.source instanceof BodySource body&&!body.body.nativeForcesEnabled()?"flight controller":"Physicalist")+" frame="+b.lastSeen+"/"+frame;for(var s:pending.values())if(s.owner()==entity)return "Queued for Rapier3D";return "Not registered in native scene";}
- public void invalidate(net.minecraft.core.BlockPos pos){terrain.invalidate(pos);}public String report(){return String.format(java.util.Locale.ROOT,"%s: %d bodies, %d sleeping, %d paused, %d terrain sections (%d bakes), %.3f ms on the server thread, %.3f ms on the physics thread",level.dimension().location(),bindings.size(),sleeping,paused,terrain.resident(),terrain.baked(),lastMillis,workerMillis);}
+ public void invalidate(net.minecraft.core.BlockPos pos){terrain.invalidate(pos);}public String report(){return String.format(java.util.Locale.ROOT,"%s: %d bodies, %d sleeping, %d paused, %d moved/%d pushed from outside, %d terrain sections (%d bakes), %.3f ms on the server thread, %.3f ms on the physics thread, %d ticks the step ran late",level.dimension().location(),bindings.size(),sleeping,paused,moved,pushed,terrain.resident(),terrain.baked(),lastMillis,workerMillis,late);}
  @Override public void close(){var future=running;running=null;stepping=null;if(future!=null)try{future.get(5,java.util.concurrent.TimeUnit.SECONDS);}catch(Exception ignored){}worker.shutdownNow();NativeBridge.destroyScene0(scene);bindings.clear();pending.clear();rigs.clear();rigJoints.clear();rigBroken.clear();dolls.clear();chains.clear();chainJoints.clear();chainEndJoints.clear();chainLimits.clear();}
 }

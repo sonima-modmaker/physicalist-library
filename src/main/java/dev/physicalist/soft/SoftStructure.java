@@ -27,7 +27,7 @@ public final class SoftStructure {
     static final double WING_ROOT_BREAK = 0.08;
     public static final double DT = 0.05 / SUBSTEPS;
     private static final int MAX_NODES = 800, NEIGHBOURS = 16;
-    public static final int BEAM_STRIDE = 9, AERO_STRIDE = 11, NODE_STRIDE = 14, ROTOR_STRIDE = 24, WHEEL_STRIDE = 28;
+    public static final int BEAM_STRIDE = 9, AERO_STRIDE = 11, NODE_STRIDE = 14, ROTOR_STRIDE = 24, WHEEL_STRIDE = 28, SKIN_STRIDE = 7;
     /** Control channels: elevator (+ = nose down), left aileron, right aileron (+ on channel 1, - on 2 = roll right), rudder (+ = nose right). */
     public static final int ELEVATOR = 0, AILERON_LEFT = 1, AILERON_RIGHT = 2, RUDDER = 3, CHANNELS = 4;
     /** An engine part weighs this much more per square metre than the rest of the hull. */
@@ -70,6 +70,8 @@ public final class SoftStructure {
     public final double[] seatRest;
     /** Model forward (+Z) pinned to the seat nodes, to know where the vehicle points. */
     public final float[] forwardCoords;
+    /** Per node, {@link #SKIN_STRIDE} values: frame nodes b, c (-1: no plate), the outward normal in the (node, b, c) frame, plate half size toward b and across. */
+    public final double[] skin;
 
     /**
      * A door: its nodes, the node on its free edge, the latch beam that holds it shut, the hinge beams (a door whose
@@ -78,7 +80,7 @@ public final class SoftStructure {
     public record Door(String name, int[] nodes, int free, int latch, int hold, int[] hinges, int hingeA, int hingeB, double turn, double length) {}
 
     private record Extras(double[] mass, double[] nodeYield, int[] crashGroups, double[] wheels, double[] rotors, double[] rotorHub, double[] rotorAxis, int[] meshChannel, double[][] hinge,
-                          boolean[] meshSpins, int[] seatNodes, float[] seatCoords, double[] seatRest, float[] forwardCoords) {}
+                          boolean[] meshSpins, int[] seatNodes, float[] seatCoords, double[] seatRest, float[] forwardCoords, double[] skin) {}
 
     private SoftStructure(double[] rest, double nodeMass, double radius, double spacing, double scale, double height, double[] beams, double[] aero,
                           int[] anchorNodes, float[] anchorCoords, int[] meshStart, List<Door> doors, int[] nodeGroup, boolean[] solid, Extras x) {
@@ -86,7 +88,7 @@ public final class SoftStructure {
         this.solid = solid;
         this.mass = x.mass; this.nodeYield = x.nodeYield; this.crashGroup = x.crashGroups; this.wheels = x.wheels; this.rotors = x.rotors; this.rotorHub = x.rotorHub; this.rotorAxis = x.rotorAxis;
         this.meshChannel = x.meshChannel; this.hinge = x.hinge; this.meshSpins = x.meshSpins;
-        this.seatNodes = x.seatNodes; this.seatCoords = x.seatCoords; this.seatRest = x.seatRest; this.forwardCoords = x.forwardCoords;
+        this.seatNodes = x.seatNodes; this.seatCoords = x.seatCoords; this.seatRest = x.seatRest; this.forwardCoords = x.forwardCoords; this.skin = x.skin;
         this.rest = rest; this.nodeMass = nodeMass; this.radius = radius; this.spacing = spacing; this.scale = scale; this.height = height;
         this.beams = beams; this.aero = aero; this.anchorNodes = anchorNodes; this.anchorCoords = anchorCoords; this.meshStart = meshStart;
         this.doors = doors; this.nodes = rest.length / 3;
@@ -516,6 +518,45 @@ public final class SoftStructure {
             double bodyShare = aircraft && ch < 0 && !flexing[mesh] ? FUSELAGE_AERO : 1;
             aero.add(new double[]{i, bi, ci, Math.min(100, a / len(bestCross)) * bodyShare, f[0], f[1], f[2], ch, t[0], t[1], t[2]});
         }
+        // Walkable skin: every surface node carries a small plate along the hull, pinned to two neighbours so it turns
+        // and bends with the structure. Overlapping plates make a closed floor players can stand on.
+        double[] skin = new double[n * SKIN_STRIDE];
+        Arrays.fill(skin, -1);
+        for (int i = 0; i < n0; i++) {
+            double[] nn = normals.get(i);
+            if (len(nn) < 1e-9) continue;
+            var list = neighbours.get(i);
+            nn = fitNormal(pos, i, list, unit(nn), h);
+            int bi = -1, ci = -1;
+            double best = 0.2;
+            double[] p = pos.get(i);
+            for (int x = 0; x < list.size(); x++) for (int y = x + 1; y < list.size(); y++) {
+                double[] e1 = sub(pos.get(list.get(x)), p), e2 = sub(pos.get(list.get(y)), p), c = cross(e1, e2);
+                double q = Math.abs(dot(c, nn)) / (len(e1) * len(e2) + 1e-12);
+                if (q > best) { best = q; bi = list.get(x); ci = list.get(y); }
+            }
+            if (bi < 0) continue;
+            double[] f = frameCoordinates(p, pos.get(bi), pos.get(ci), add(p, unit(nn)));
+            // The plate's axes, as the game rebuilds them: t toward b in the plate's plane, u across.
+            double[] n1 = unit(nn), tb = sub(pos.get(bi), p);
+            tb = unit(sub(tb, scaleV(n1, dot(tb, n1))));
+            double[] ub = cross(n1, tb);
+            // Each way it reaches about 0.65 of the way to the farthest close neighbour that way, so plates overlap into
+            // a closed floor but stop at an edge: at a wing's leading edge the plate stands upright and must not stick
+            // up above the wing.
+            double reachT = 0, reachU = 0;
+            for (int j : list) {
+                double[] d = sub(pos.get(j), p);
+                // Only its own part's skin: a thin strut under a wing must not grow a plate as wide as the wing's.
+                if (len(d) > 1.6 * h || j >= n0 || nodes.get(j).mesh() != nodes.get(i).mesh() || Math.abs(dot(d, n1)) > 0.5 * len(d)) continue;
+                reachT = Math.max(reachT, Math.abs(dot(d, tb)));
+                reachU = Math.max(reachU, Math.abs(dot(d, ub)));
+            }
+            skin[i * SKIN_STRIDE] = bi; skin[i * SKIN_STRIDE + 1] = ci;
+            skin[i * SKIN_STRIDE + 2] = f[0]; skin[i * SKIN_STRIDE + 3] = f[1]; skin[i * SKIN_STRIDE + 4] = f[2];
+            skin[i * SKIN_STRIDE + 5] = Math.clamp(reachT * 0.65, 0.04, 1.2);
+            skin[i * SKIN_STRIDE + 6] = Math.clamp(reachU * 0.65, 0.04, 1.2);
+        }
         // Wheels: their nodes roll along the ground about the wheel's axle (its thinnest side).
         double[] wheels = new double[n * 5];
         for (int i = 0; i < n; i++) wheels[i * 5] = wheels[i * 5 + 1] = -1;
@@ -638,34 +679,67 @@ public final class SoftStructure {
         // An aircraft's airframe keeps one shape while it is whole (a wing must not flap at its root in flight) and
         // falls back to one per part after its first hard knock.
         int split = partIds.size() > 900 ? 1 : partIds.size();
-        int[] crashGroups = shapeGroups(split, n, n0, nodeGroup, nodePart, gearNode, pos);
-        // Every part keeps its own shape, so wings flex at the root and can tear off; the native side can also hold a
-        // whole airframe as one shape until a hard knock (pass a single-part grouping here to use that).
-        int[] groups = crashGroups;
+        // Whole, wings and tailplanes keep the fuselage's shape, so ordinary flight loads never bend them at the root
+        // (held by beams alone they sagged and snapped in level flight). After the first hard knock (a crash) every part
+        // keeps its own shape, so a wing can be torn off.
+        int[] crashGroups = shapeGroups(split, n, n0, nodeGroup, nodePart, gearNode, new boolean[n], pos);
+        int[] groups = shapeGroups(split, n, n0, nodeGroup, nodePart, gearNode, wingNode, pos);
         boolean[] solid = new boolean[n];
         for (int i = 0; i < n0; i++) solid[i] = true;
         boolean[] meshSpins = rotorFrame != null ? spinning : new boolean[meshes];
-        var extras = new Extras(mass, nodeYield, crashGroups, wheels, rotorArray, rotorHub, rotorAxis, meshChannel, hinge, meshSpins, seatNodes, seatCoords, seatRest, forwardCoords);
+        var extras = new Extras(mass, nodeYield, crashGroups, wheels, rotorArray, rotorHub, rotorAxis, meshChannel, hinge, meshSpins, seatNodes, seatCoords, seatRest, forwardCoords, skin);
         return new SoftStructure(rest, nodeMass, radius, h, scale, height, beams, aeroArray, anchorNodes, anchorCoords, meshStart, finished, groups, solid, extras);
     }
 
     /** Shape-matching group of every node when the body is split into `parts` part shapes (see the native side). */
-    private static int[] shapeGroups(int parts, int n, int n0, List<Integer> nodeGroup, List<Integer> nodePart, boolean[] gearNode, List<double[]> pos) {
+    private static int[] shapeGroups(int parts, int n, int n0, List<Integer> nodeGroup, List<Integer> nodePart, boolean[] gearNode, boolean[] wingNode, List<double[]> pos) {
         int[] partCount = new int[parts];
         for (int i = 0; i < n0; i++) if (nodeGroup.get(i) == 0) partCount[Math.min(nodePart.get(i), parts - 1)]++;
         List<Integer> bigBody = new ArrayList<>();
-        for (int i = 0; i < n0; i++) if (nodeGroup.get(i) == 0 && !gearNode[i] && partCount[Math.min(nodePart.get(i), parts - 1)] >= 8) bigBody.add(i);
+        for (int i = 0; i < n0; i++) if (nodeGroup.get(i) == 0 && !gearNode[i] && !wingNode[i] && partCount[Math.min(nodePart.get(i), parts - 1)] >= 8) bigBody.add(i);
+        // A model that is nothing but wing (a glider plank) keeps them as its own parts.
+        boolean wingsJoin = !bigBody.isEmpty();
+        if (!wingsJoin) for (int i = 0; i < n0; i++) if (nodeGroup.get(i) == 0 && !gearNode[i] && partCount[Math.min(nodePart.get(i), parts - 1)] >= 8) bigBody.add(i);
         int[] groups = new int[n];
         for (int i = 0; i < n; i++) {
             int g = nodeGroup.get(i);
             if (i < n0 && g > 0) { groups[i] = parts + g; continue; }
             int own = i < n0 ? Math.min(nodePart.get(i), parts - 1) : -1;
             // Wheels and their legs keep the shape of the wing or fuselage they hang from (or a wheel would spin on its leg).
-            if (own < 0 || partCount[own] < 8 || i < n0 && gearNode[i]) own = bigBody.isEmpty() ? 0 : Math.min(nodePart.get(nearest(bigBody, pos, pos.get(i))), parts - 1);
+            if (own < 0 || partCount[own] < 8 || i < n0 && (gearNode[i] || wingsJoin && wingNode[i])) own = bigBody.isEmpty() ? 0 : Math.min(nodePart.get(nearest(bigBody, pos, pos.get(i))), parts - 1);
             groups[i] = g >= 1000 ? 1000 * (own + 1) + parts + (g - 1000) : own;
         }
         return groups;
     }
+    /**
+     * The skin's own normal at node i: a least-squares plane through its close neighbours on the same skin (the node's
+     * clustered normal can lean 40 degrees near an edge, and a plate that leans stands proud of the hull). Neighbours on
+     * the opposite skin (a wing's underside) are about as far off the plane as they are away, and are left out.
+     */
+    private static double[] fitNormal(List<double[]> pos, int i, List<Integer> list, double[] n, double h) {
+        double[] p = pos.get(i);
+        for (int pass = 0; pass < 2; pass++) {
+            double[] t = unit(Math.abs(n[1]) < 0.9 ? cross(n, new double[]{0, 1, 0}) : cross(n, new double[]{1, 0, 0})), u = cross(n, t);
+            double stt = 0, stu = 0, suu = 0, ste = 0, sue = 0;
+            int count = 0;
+            for (int j : list) {
+                double[] d = sub(pos.get(j), p);
+                double l = len(d), e = dot(d, n);
+                if (l > 1.6 * h || l < 1e-9 || Math.abs(e) > 0.5 * l) continue;
+                double a = dot(d, t), b = dot(d, u);
+                stt += a * a; stu += a * b; suu += b * b; ste += a * e; sue += b * e;
+                count++;
+            }
+            double det = stt * suu - stu * stu;
+            if (count < 3 || Math.abs(det) < 1e-12) return n;
+            double gt = (ste * suu - sue * stu) / det, gu = (sue * stt - ste * stu) / det;
+            double[] fitted = unit(sub(n, add(scaleV(t, gt), scaleV(u, gu))));
+            if (dot(fitted, n) < 0.5) return n;
+            n = fitted;
+        }
+        return n;
+    }
+
     /** Three nodes near p that make a well-shaped frame to pin p to. */
     private static int[] pin(double[] p, Grid gg, List<Integer> members, List<double[]> pos, double h) {
         int[] cand = gg.nearest(p, 10, members, pos);

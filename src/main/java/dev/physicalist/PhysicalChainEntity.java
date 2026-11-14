@@ -103,7 +103,8 @@ public final class PhysicalChainEntity extends Entity implements PhysicalistBody
   * Shifting the whole chain toward its ends made it slide along with a walking player and let go at flying speed.
   */
  public Vec3[][] visualSegments(float partial){
-  int n=links.size();Vec3[] start=new Vec3[n],end=new Vec3[n];double[] length=new double[n];
+  // A client entity has no links until its first pose arrives (or one was rejected); nothing to draw yet.
+  int n=links.size();if(n==0||previous.length!=n)return new Vec3[0][];Vec3[] start=new Vec3[n],end=new Vec3[n];double[] length=new double[n];
   for(int i=0;i<n;i++){var v=visualRotation(i,partial).transform(new org.joml.Vector3f(0,(float)links.get(i).half.y,0));Vec3 c=visualPosition(i,partial);start[i]=c.subtract(v.x,v.y,v.z);end[i]=c.add(v.x,v.y,v.z);length[i]=links.get(i).half.y*2;}
   // Joint k joins link k-1 and k unless cut; joint 0 and n hold the attachments.
   Vec3[] joint=new Vec3[n+1];boolean[] pinned=new boolean[n+1];

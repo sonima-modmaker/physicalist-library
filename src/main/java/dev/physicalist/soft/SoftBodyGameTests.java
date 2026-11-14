@@ -357,8 +357,8 @@ public final class SoftBodyGameTests {
     }
 
     /**
-     * Wings spring: a hard upward blow on one wing tip flexes it and it springs back to its shape; only a blow far past
-     * anything flying gives (a crash) bends it for good or tears it off.
+     * Wings hold: a hard upward blow on one wing tip leaves it in shape; only a blow far past anything flying gives (a
+     * crash) bends it for good or tears it off.
      */
     @GameTest(template = "empty", timeoutTicks = 300)
     public static void wingSpringsBackUnlessHitFarTooHard(GameTestHelper h) throws Exception {
@@ -381,7 +381,8 @@ public final class SoftBodyGameTests {
             run(level, plane, 60);
             double after = distortion(plane);
             String trace = String.format("tip nodes %d, settled %.3f, flexed %.3f, after %.3f", who.length, settled, flexed, after);
-            h.assertTrue(flexed > settled + 0.05, "the wing did not flex: " + trace);
+            // A whole airframe holds its wings rigidly: an ordinary load hardly bends them and leaves no bend behind.
+            h.assertTrue(flexed < settled + 0.3, "the wing bent far under a blow it should shrug off: " + trace);
             h.assertTrue(after < settled + 0.06, "the wing stayed bent after a blow it should spring back from: " + trace);
             int versionBefore = plane.version();
             plane.kick(who, new double[]{0, 90, 0});
@@ -392,6 +393,45 @@ public final class SoftBodyGameTests {
             h.assertTrue(wrecked > after + 0.3 || plane.version() > versionBefore, "a crash-sized blow left the wing whole: " + trace);
             h.succeed();
         } finally { plane.discard(); }
+    }
+
+    /** A player dropped onto a parked plane's wing stands on its skin instead of falling through to the ground. */
+    @GameTest(template = "empty", timeoutTicks = 200)
+    public static void playerStandsOnWing(GameTestHelper h) throws Exception {
+        if (!NativeSoft.AVAILABLE) { h.succeed(); return; }
+        var at = h.absolutePos(new BlockPos(1, 140, 1));
+        var level = floor(h, at, 8);
+        var plane = spawn(level, "plane", new Vec3(at.getX() + .5, at.getY() + 1.05, at.getZ() + .5), Vec3.ZERO);
+        var player = h.makeMockServerPlayerInLevel();
+        try {
+            run(level, plane, 40);
+            double[] p = plane.nodes();
+            var s = plane.structure();
+            double span = 0;
+            for (int i = 0; i < s.nodes; i++) span = Math.max(span, Math.abs(p[i * 3] - plane.getX()));
+            // The highest wing node about halfway out, away from the fuselage.
+            int best = -1;
+            for (int i = 0; i < s.nodes; i++) {
+                double out = Math.abs(p[i * 3] - plane.getX());
+                if (s.solid[i] && out > span * 0.4 && out < span * 0.6 && (best < 0 || p[i * 3 + 1] > p[best * 3 + 1])) best = i;
+            }
+            double top = p[best * 3 + 1];
+            player.setPos(p[best * 3], top + 1.2, p[best * 3 + 2]);
+            for (int t = 0; t < 10; t++) player.move(net.minecraft.world.entity.MoverType.SELF, new Vec3(0, -0.3, 0));
+            double nearTop = -1e9, plateTop = -1e9;
+            var foot = player.getBoundingBox();
+            for (int i = 0; i < s.nodes; i++) if (Math.abs(p[i * 3] - player.getX()) < 0.3 && Math.abs(p[i * 3 + 2] - player.getZ()) < 0.3) nearTop = Math.max(nearTop, p[i * 3 + 1]);
+            String worst = "";
+            for (var b : plane.walkBoxes(foot.inflate(0.05, 1, 0.05))) {
+                double y = dev.physicalist.CompoundCollision.bounds(b).maxY;
+                if (y > plateTop) { plateTop = y; worst = String.format("centre %s axes %s half %s", b.center(), java.util.Arrays.toString(b.axes()), java.util.Arrays.toString(b.half())); }
+            }
+            org.slf4j.LoggerFactory.getLogger("Physicalist").info("Highest plate: {}", worst);
+            String trace = String.format("wing top %.2f, highest node under feet %.2f, highest plate %.2f, player feet %.2f, ground %.2f", top, nearTop, plateTop, player.getY(), at.getY() + 1.0);
+            org.slf4j.LoggerFactory.getLogger("Physicalist").info("Standing: {}", trace);
+            h.assertTrue(player.getY() > top - 0.15 && player.getY() < top + 0.15, "the player did not stand on the wing: " + trace);
+            h.succeed();
+        } finally { plane.discard(); player.discard(); }
     }
 
     /** A plane dropped flat falls far slower than in vacuum (its wings catch the air) and keeps its shape. */

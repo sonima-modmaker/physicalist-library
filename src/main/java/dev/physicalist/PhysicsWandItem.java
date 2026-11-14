@@ -53,14 +53,26 @@ public final class PhysicsWandItem extends Item {
         return new Quaternionf(grip.getFloat("QX"), grip.getFloat("QY"), grip.getFloat("QZ"), grip.getFloat("QW")).normalize();
     }
 
-    @Override public void onUseTick(Level level, LivingEntity user, ItemStack stack, int remaining) {
-        if (!(level instanceof ServerLevel server) || !(user instanceof Player player)
-                || !player.getAbilities().instabuild) return;
+    /**
+     * Steering happens in {@link #steerHeld} at the start of the level tick, not here: players tick after the level,
+     * while the next physics step already runs on its own thread, and waiting for it here (to steer from the current
+     * pose) made every step synchronous for as long as anything was held, which dropped the server's TPS.
+     */
+    @Override public void onUseTick(Level level, LivingEntity user, ItemStack stack, int remaining) {}
+
+    /**
+     * Start of a level tick, right after the last physics step was picked up: every player holding the wand steers
+     * their body from its current pose, and the server never waits for the physics thread.
+     */
+    public static void steerHeld(ServerLevel server) {
+        for (Player player : server.players())
+            if (player.isUsingItem() && player.getUseItem().getItem() instanceof PhysicsWandItem) steer(server, player);
+    }
+
+    private static void steer(ServerLevel server, Player player) {
+        if (!player.isAlive() || !player.getAbilities().instabuild) return;
         var data = player.getPersistentData();
         if (data.getBoolean(WAIT)) return;
-        // Players tick after the level, while the next physics step already runs on its own thread. Waiting for it
-        // lets the wand steer from the body's current pose instead of the one a tick old (which made it overshoot).
-        dev.physicalist.nativecore.NativeWorlds.settle(server);
         Entity entity = data.hasUUID(TARGET) ? server.getEntity(data.getUUID(TARGET)) : null;
         PhysicsBody body = entity == null ? null : PhysicalistBodies.find(entity);
         if (body == null && !grab(player)) return;
@@ -162,7 +174,7 @@ public final class PhysicsWandItem extends Item {
         if (!(player.level() instanceof ServerLevel server)) return;
         var data = player.getPersistentData();
         if (!data.hasUUID(TARGET)) return;
-        dev.physicalist.nativecore.NativeWorlds.settle(server);
+        // Only the grip changes here; the body is steered at the next level tick. No need to wait for the physics thread.
         Entity entity = server.getEntity(data.getUUID(TARGET));
         if (entity == null) return;
         PhysicsBody body = PhysicalistBodies.find(entity);

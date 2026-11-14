@@ -37,6 +37,29 @@ public final class PhysicalistTargeting {
         return best;
     }
 
+    /** As {@link #aimedBody}, soft bodies (planes, cars) included: what the deleter removes. */
+    public static Entity aimedRemovable(Player player, double range) {
+        Hit hit = aim(player, range);
+        Vec3 start = player.getEyePosition(), end = start.add(player.getLookAngle().scale(range));
+        double distance = hit == null ? Double.POSITIVE_INFINITY : (hit.point().distanceTo(start) / range);
+        Entity best = hit == null ? null : hit.entity();
+        AABB ray = new AABB(start, end).inflate(0.5);
+        for (Entity candidate : player.level().getEntities(player, ray.inflate(2), e -> e.isAlive() && e instanceof dev.physicalist.soft.SoftBodyEntity)) {
+            var soft = (dev.physicalist.soft.SoftBodyEntity) candidate;
+            var plates = soft.walkBoxes(ray);
+            for (var box : plates) {
+                double t = rayFraction(box, start, end);
+                if (t < distance) { distance = t; best = candidate; }
+            }
+            // A body with no plates yet (still loading its model): its bounds count.
+            if (plates.isEmpty()) {
+                var clip = candidate.getBoundingBox().clip(start, end);
+                if (clip.isPresent()) { double t = clip.get().distanceTo(start) / range + 0.01; if (t < distance) { distance = t; best = candidate; } }
+            }
+        }
+        return best;
+    }
+
     /** Ray against the same oriented parts used by the collision solver. */
     static double rayFraction(CompoundCollision.Box box, Vec3 start, Vec3 end) {
         Vec3 offset = start.subtract(box.center());

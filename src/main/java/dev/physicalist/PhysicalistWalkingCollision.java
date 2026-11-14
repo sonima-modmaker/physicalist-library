@@ -32,6 +32,17 @@ public final class PhysicalistWalkingCollision {
                 if (columns >= MAX_COLUMNS) return result;
             }
         }
+        // Soft bodies (a plane, a car): the plates along their hull.
+        for (Entity candidate : level.getEntities(mover, query.inflate(1), entity -> entity.isAlive() && entity instanceof dev.physicalist.soft.SoftBodyEntity)) {
+            var soft = (dev.physicalist.soft.SoftBodyEntity) candidate;
+            if (soft.hasPassenger(mover)) continue;
+            for (CompoundCollision.Box box : soft.walkBoxes(query)) {
+                if (!intersects(box, query)) continue;
+                if (result == null) result = new ArrayList<>(original);
+                columns = addColumns(result, box, query, columns);
+                if (columns >= MAX_COLUMNS) return result;
+            }
+        }
         return result == null ? original : result;
     }
 

@@ -23,7 +23,7 @@ public final class PhysicalistLibrary {
         org.slf4j.LoggerFactory.getLogger("Physicalist").info("Physicalist 0.18 ragdolls: {}",dev.physicalist.nativecore.NativeBridge.STATUS);
         // Rigid-body steps run on a physics thread per dimension: started after the level tick, picked up before the next.
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.tick.LevelTickEvent.Pre event)->{
-            if(event.getLevel() instanceof net.minecraft.server.level.ServerLevel level)dev.physicalist.nativecore.NativeWorlds.settle(level);
+            if(event.getLevel() instanceof net.minecraft.server.level.ServerLevel level){dev.physicalist.nativecore.NativeWorlds.poll(level);PhysicsWandItem.steerHeld(level);}
         });
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.tick.LevelTickEvent.Post event)->{
             if(event.getLevel() instanceof net.minecraft.server.level.ServerLevel level)dev.physicalist.nativecore.NativeWorlds.launch(level);

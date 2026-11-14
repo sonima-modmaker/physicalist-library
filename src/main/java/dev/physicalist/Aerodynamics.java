@@ -31,6 +31,9 @@ public final class Aerodynamics {
         }
         torque = torque.add(forward.scale(imbalance * Math.min(
                 p.maximumImbalanceTorque(), speed * p.imbalanceTorque())));
+        // Below about 2 m/s air turns nothing: weathervaning a body that only jitters in a pile spun it about every
+        // tick, and a heap of dropped items never came to rest (nor slept, so it was solved every tick).
+        torque = torque.scale(Math.clamp((speed - .05) / .1, 0, 1));
         return new Step(velocity.scale(1 - drag).add(lift).add(0, -p.gravity(), 0),
                 angular.scale(p.angularDamping()).add(torque));
     }

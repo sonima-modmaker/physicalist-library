@@ -17,7 +17,7 @@ public final class PhysicalistDeleterItem extends Item {
         ItemStack stack = player.getItemInHand(hand);
         if (!player.getAbilities().instabuild) return InteractionResultHolder.fail(stack);
         if (level instanceof ServerLevel) {
-            var entity = PhysicalistTargeting.aimedBody(player, 64);
+            var entity = PhysicalistTargeting.aimedRemovable(player, 64);
             if (entity != null) {
                 int id = entity.getId();
                 entity.discard();
